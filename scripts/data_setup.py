@@ -293,5 +293,6 @@ class TrichomeDataset(Dataset):
         # Generate target map from coordinates
         _, H, W = img.shape
         target_map = self.target_map_fun(coords, H, W, *self.target_map_args, **self.target_map_kwargs)
+        target_map = target_map.unsqueeze(0) # Add dim s.t. target maps are later of dim (B,1,H,W) matching model output
 
         return img, target_map, coords

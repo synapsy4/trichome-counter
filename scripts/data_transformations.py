@@ -4,6 +4,7 @@ Custom transformation classes to transform images and coordinates.
 """
 import torch
 import torch.nn.functional as F
+import random
 
 class Compose:
     """
@@ -282,5 +283,114 @@ class RandomVerticalFlip:
         if len(coords) > 0:
             coords = coords.clone()
             coords[:, 1] = H - 1 - coords[:, 1]
+
+        return image, coords
+    
+
+
+
+class RandomBrightness:
+    """
+    Randomly adjust image brightness.
+
+    Parameters
+    ----------
+    brightness_factor : float
+        Maximum relative brightness change.
+        Example: 0.2 -> brightness in [0.8, 1.2]
+
+    Methods
+    -------
+    __call__(image, coords)
+        Adjust brightness without modifying coordinates.
+    """
+
+    def __init__(self, brightness_factor=0.2):
+        self.brightness_factor = brightness_factor
+
+    def __call__(self, image, coords):
+        """
+        Adjust image brightness.
+
+        Parameters
+        ----------
+        image : torch.Tensor
+            Input image (C, H, W), expected in range [0,1]
+        coords : torch.Tensor
+            Nx2 point coordinates (unchanged)
+
+        Returns
+        -------
+        image : torch.Tensor
+            Brightness-adjusted image
+        coords : torch.Tensor
+            Unchanged coordinates
+        """
+
+        # Sample brightness factor
+        factor = 1.0 + random.uniform(
+            -self.brightness_factor,
+            self.brightness_factor
+        )
+
+        image = image * factor
+        image = torch.clamp(image, 0.0, 1.0)
+
+        return image, coords
+    
+
+class PadToMultipleOf32:
+    """
+    Pad image so height and width are divisible by 32.
+
+    This is useful for encoder-decoder architectures (e.g. U-Net with
+    ResNet backbone) that downsample the feature maps by a total factor
+    of 32. Padding avoids shape mismatches in skip connections.
+
+    Padding is applied to the bottom and right side of the image.
+    Coordinates remain unchanged.
+
+    Methods
+    -------
+    __call__(image, coords)
+        Pad image spatial dimensions to next multiple of 32.
+    """
+
+    def __call__(self, image, coords):
+        """
+        Pad image to nearest multiple of 32.
+
+        Parameters
+        ----------
+        image : torch.Tensor
+            Input image tensor of shape (C, H, W).
+        coords : torch.Tensor
+            Nx2 array of point coordinates (unchanged).
+
+        Returns
+        -------
+        image : torch.Tensor
+            Padded image tensor of shape (C, H_new, W_new),
+            where H_new and W_new are divisible by 32.
+        coords : torch.Tensor
+            Unchanged point coordinates.
+        """
+
+        _, H, W = image.shape
+
+        # Compute next multiple of 32 for height and width
+        new_H = (H + 31) // 32 * 32
+        new_W = (W + 31) // 32 * 32
+
+        pad_h = new_H - H
+        pad_w = new_W - W
+
+        # Pad format: (left, right, top, bottom)
+        image = F.pad(
+            image,
+            (0, pad_w, 0, pad_h),
+            mode="constant",
+            value=0
+        )
 
         return image, coords
