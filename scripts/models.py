@@ -31,6 +31,7 @@ class DensityModel(nn.Module):
         # Enforce non-negative density values
         # Density maps represent counts → must be >= 0
         self.relu = nn.ReLU(inplace=True)
+        self.tanh = nn.Tanh()
 
     def forward(self, x):
         """
@@ -46,4 +47,4 @@ class DensityModel(nn.Module):
         torch.Tensor
             Predicted density maps (B, 1, H, W)
         """
-        return self.relu(self.base_model(x))
+        return self.tanh(self.relu(self.base_model(x)))

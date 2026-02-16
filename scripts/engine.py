@@ -2,6 +2,7 @@
 Train, validate and inference functions.
 """
 import torch
+from . import utils
 from tqdm.auto import tqdm
 
 def train_one_epoch(model, dataloader, optimizer, criterion, device):
@@ -97,9 +98,45 @@ def validate(model, dataloader, criterion, device):
         total_mae / len(dataloader)
     )
 
-def train(model, train_dataloader, val_dataloader, epochs, optimizer, criterion, device):
+def train(model, model_name, train_dataloader, val_dataloader, epochs, optimizer, criterion, hparams, device):
+    """
+    Train a model for a specified number of epochs and track performance metrics.
 
-    for epoch in tqdm(range(epochs)):
+    Identifies the best-performing epoch based on validation MAE, and saves the 
+    best and last model checkpoints along with training metadata.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        The model to be trained.
+    model_name : str
+        Name used when saving the trained model.
+    train_dataloader : torch.utils.data.DataLoader
+        DataLoader providing the training dataset.
+    val_dataloader : torch.utils.data.DataLoader
+        DataLoader providing the validation dataset.
+    epochs : int
+        Number of training epochs.
+    optimizer : torch.optim.Optimizer
+        Optimizer used to update model parameters.
+    criterion : callable
+        Loss function used to compute training and validation loss.
+    hparams : dict
+        Dictionary used to store the hyperparameters.
+    device : torch.device
+        Device on which the model and data are processed ("cpu" or "cuda").
+    """
+    # Things we want to save
+    best_epoch = 1
+    best_epoch_val_mae = None
+    best_model_cp = model.state_dict()
+    train_loss_list = []
+    train_mae_list = []
+    val_loss_list = []
+    val_mae_list = []
+    
+    # Run training loop
+    for epoch in tqdm(range(1,epochs+1)):
 
         # Train step
         train_loss, train_mae = train_one_epoch(model=model,
@@ -113,5 +150,40 @@ def train(model, train_dataloader, val_dataloader, epochs, optimizer, criterion,
                                         criterion=criterion,
                                         device=device)
         
+        # Update best val epoch if lowest mae reached
+        if best_epoch_val_mae is None or val_mae < best_epoch_val_mae:
+            best_epoch = epoch
+            best_epoch_val_mae = val_mae
+            best_model_cp = model.state_dict()
+        
+        # Store losses and maes
+        train_loss_list.append(train_loss)
+        train_mae_list.append(train_mae)
+        val_loss_list.append(val_loss)
+        val_mae_list.append(val_mae)
+        
         # Print status
-        print(f"Epoch {epoch+1:03d} | Train-loss={train_loss:.0f}, train-mae={train_mae:.0f} | Val-loss={val_loss:.0f}, val-mae={val_mae:.0f}")
+        print(f"Epoch {epoch:03d} | Train-loss={train_loss:.0f}, train-mae={train_mae:.0f} | Val-loss={val_loss:.0f}, val-mae={val_mae:.0f}")
+
+    # Write metric dict
+    metrics = {
+        "best_epoch": best_epoch,
+        "best_epoch_val_mae": best_epoch_val_mae,
+        "train_loss_list": train_loss_list,
+        "train_mae_list": train_mae_list,
+        "val_loss_list": val_loss_list,
+        "val_mae_list": val_mae_list
+        }
+
+    # Write metadata dict
+    metadata = {
+        "hyperparameters": hparams,
+        "metrics": metrics
+    }
+
+
+    # Save model
+    utils.save_model(model=model,
+               model_name=model_name,
+               metadata=metadata,
+               best_cp=best_model_cp)
