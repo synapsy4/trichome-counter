@@ -58,27 +58,50 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device):
 @torch.no_grad()
 def validate(model, dataloader, criterion, device):
     """
-    Evaluate model on validation/test set.
-
+    Evaluate a model on a validation or test dataset.
+    
+    Performs a forward pass on the dataset without computing gradients, 
+    computes the loss using the provided criterion, and tracks count-level 
+    metrics such as mean absolute error (MAE) for object counts.
+    
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Trained model to evaluate.
+    dataloader : torch.utils.data.DataLoader
+        DataLoader providing batches of validation/test data.
+    criterion : callable
+        Loss function.
+    device : torch.device
+        Device to run computations on (e.g., "cuda" or "cpu").
+    
     Returns
     -------
     avg_loss : float
-        Average validation loss
+        Average loss over all batches in the dataset.
     avg_mae : float
-        Average count MAE
+        Average count-level mean absolute error (MAE) over all batches.
+    gt_counts : list of torch.Tensor
+        List of total counts per batch computed from ground truth density maps.
+    pred_counts : list of torch.Tensor
+        List of total counts per batch computed from predicted density maps.
     """
 
     model.eval()
 
+    # Init return variables
     total_loss = 0.0
     total_mae = 0.0
+    gt_counts = []
+    pred_counts = []
 
+    # Loop through batches
     for images, gt_density, _ in dataloader:
 
         images = images.to(device)
         gt_density = gt_density.to(device)
 
-        # Forward pass (no gradients)
+        # Forward pass
         pred_density = model(images)
 
         # Compute loss
@@ -93,9 +116,15 @@ def validate(model, dataloader, criterion, device):
         mae = torch.abs(pred_count - gt_count).mean()
         total_mae += mae.item()
 
+        # Update counts
+        gt_counts.extend(gt_count)
+        pred_counts.extend(pred_count)
+
     return (
         total_loss / len(dataloader),
-        total_mae / len(dataloader)
+        total_mae / len(dataloader),
+        gt_counts,
+        pred_counts
     )
 
 def train(model, model_name, train_dataloader, val_dataloader, epochs, optimizer, criterion, hparams, device):
@@ -145,7 +174,7 @@ def train(model, model_name, train_dataloader, val_dataloader, epochs, optimizer
                                                 criterion=criterion,
                                                 device=device)
         # Validation step
-        val_loss, val_mae = validate(model=model,
+        val_loss, val_mae, _, _ = validate(model=model,
                                         dataloader=val_dataloader,
                                         criterion=criterion,
                                         device=device)

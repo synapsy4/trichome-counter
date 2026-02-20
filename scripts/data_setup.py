@@ -13,9 +13,10 @@ from torch.utils.data import Dataset
 
 
 def split_filenames(
-        file_ids,
+        raw_root,
         train_ratio=0.7,
         val_ratio=0.15,
+        stratify=True,
         seed=42
         ):
     """
@@ -23,12 +24,14 @@ def split_filenames(
 
     Parameters
     ----------
-    file_ids : list of str
-        List of file identifier strings.
+    raw_root : Path
+        Directory with raw TIFF images and coordinate .mat files.
     train_ratio : float, optional
         Proportion for training set (default: 0.7).
     val_ratio : float, optional
         Proportion for validation set (default: 0.15).
+    stratify : bool, optional
+        Splits with balanced data distributions (default: True).
     seed : int, optional
         Random seed for reproducibility (default: 42).
 
@@ -37,24 +40,81 @@ def split_filenames(
     dict
         Dictionary with keys 'train', 'val', 'test' containing lists of file IDs.
     """ 
-    # Random shuffle ids
+    # Setup random number generator
     rng = random.Random(seed)
-    file_ids = list(file_ids)
-    rng.shuffle(file_ids)
 
-    # Get lengths of train and val data
-    n = len(file_ids)
-    n_train = int(train_ratio * n)
-    n_val = int(val_ratio * n)
+    # Get all data ids
+    data_ids = np.array(sorted(p.stem for p in raw_root.glob("*.tiff")))
+    
+    # Balance splits by trichome counts
+    if stratify:
+        # Init array for all trichome counts
+        coord_lens = np.zeros(len(data_ids))
+        
+        # Read out number of trichomes per data instance
+        for i,data_id in enumerate(data_ids):
+            coord_path = raw_root / f"{data_id}_coords.mat"
+            coord_data = sio.loadmat(coord_path)
+            n_coords = len(coord_data["coords"])
+            coord_lens[i] = n_coords
 
-    # Sort shuffled ids into split-categories
-    file_id_splits = {
-        "train": file_ids[:n_train],
-        "val": file_ids[n_train:n_train+n_val],
-        "test": file_ids[n_train+n_val:]
-    }
+        # Calculate bin edges
+        n_bins = 5
+        quantiles = np.linspace(0, 1, n_bins + 1)
+        bin_edges = np.quantile(coord_lens, quantiles)
+        bin_edges[-1] += 1e-8 # open last bin
 
-    return file_id_splits
+        # Get bin index of each data instance
+        bin_indices = np.digitize(coord_lens, bin_edges[1:-1], right=True)
+
+        # Init id lists for all splits
+        train_ids = []
+        val_ids = []
+        test_ids = []
+
+        # Fill split id lists with binned (balanced) data ids
+        for b in range(n_bins):
+            # Get data indices for current bin + shuffle them
+            indices = np.where(bin_indices == b)[0]
+            indices = list(indices)
+            rng.shuffle(indices)
+
+            # Get number of (train, val) data instances for current bin
+            n = len(indices)
+            n_train = int(n * train_ratio)
+            n_val = int(n * val_ratio)
+
+            # Extend split id lists
+            train_ids.extend(data_ids[indices[:n_train]])
+            val_ids.extend(data_ids[indices[n_train:n_train+n_val]])
+            test_ids.extend(data_ids[indices[n_train+n_val:]])
+
+        # Sort balannced ids into split-categories
+        data_id_splits = {
+            "train": train_ids,
+            "val": val_ids,
+            "test": test_ids
+        }
+
+    # Do not balance data splits by trichome counts
+    else:
+        # Random shuffle ids
+        data_ids = list(data_ids)
+        rng.shuffle(data_ids)
+
+        # Get lengths of train and val data
+        n = len(data_ids)
+        n_train = int(train_ratio * n)
+        n_val = int(val_ratio * n)
+
+        # Sort ids into split-categories
+        data_id_splits = {
+            "train": data_ids[:n_train],
+            "val": data_ids[n_train:n_train+n_val],
+            "test": data_ids[n_train+n_val:]
+        }
+
+    return data_id_splits
 
 
 def process_single_image(
@@ -173,8 +233,7 @@ def preprocess_dataset(raw_root: Path, out_root: Path):
         If ROI sizes are inconsistent.
     """  
     # Get all file ids and define splits
-    file_ids = sorted(p.stem for p in raw_root.glob("*.tiff"))
-    splits = split_filenames(file_ids)
+    splits = split_filenames(raw_root)
 
     last_roi_size = None
 

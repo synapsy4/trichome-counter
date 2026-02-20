@@ -338,6 +338,64 @@ class RandomBrightness:
 
         return image, coords
     
+class RandomRotate90:
+    """
+    Randomly rotate image and coordinates by 90 degrees clockwise
+    with given probability.
+
+    Parameters
+    ----------
+    p : float, optional
+        Probability of applying the rotation (default: 0.5).
+
+    Methods
+    -------
+    __call__(image, coords)
+        Apply random 90° rotation to image and coordinates.
+    """
+    def __init__(self, p=0.5):
+        self.p = p
+
+    def __call__(self, image, coords):
+        """
+        Apply random 90° clockwise rotation.
+
+        Parameters
+        ----------
+        image : torch.Tensor
+            Input image of shape (C, H, W).
+        coords : torch.Tensor
+            Nx2 array of point coordinates (x, y).
+
+        Returns
+        -------
+        image : torch.Tensor
+            Rotated or original image.
+        coords : torch.Tensor
+            Rotated or original point coordinates.
+        """
+        # By chance return data without rotation
+        if torch.rand(1).item() > self.p:
+            return image, coords
+
+        _, H, W = image.shape
+
+        # Rotate image 90° clockwise
+        image = torch.rot90(image, k=-1, dims=[1, 2])
+
+        # If coordinates exist, rotate them
+        if len(coords) > 0:
+            coords = coords.clone()
+            x = coords[:, 0].clone()
+            y = coords[:, 1].clone()
+
+            # 90° clockwise rotation:
+            # (x, y) -> (H - 1 - y, x)
+            coords[:, 0] = H - 1 - y
+            coords[:, 1] = x
+
+        return image, coords
+
 
 class PadToMultipleOf32:
     """

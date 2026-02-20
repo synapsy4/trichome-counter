@@ -245,30 +245,67 @@ def save_model(model,
     
     # Create model instance save path
     model_list = os.listdir(model_dir_path)
-    model_idx = 1
-    model_instance_id = f"training_run_{model_idx:02d}"
-    while model_instance_id in model_list:
-        model_idx += 1
-        model_instance_id = f"training_run_{model_idx:02d}"
+    idx_list = [int(run[-3:]) for run in model_list if run != "overview.json"] if len(model_list)>0 else [0]
+    model_idx = max(idx_list) + 1
+    model_instance_id = f"training_run_{model_idx:03d}"
     model_instance_path = model_dir_path / Path(model_instance_id)
     model_instance_path.mkdir(parents=True,
                             exist_ok=True)
+    
+    # Get model overview path
+    model_overview_path = model_dir_path / "overview.json"
+
+    # First training run -> create metadata overview
+    if model_idx == 1: 
+        model_overview = metadata.copy()
+        del model_overview["hyperparameters"]["lr"]
+        del model_overview["hyperparameters"]["weight_decay"]
+        del model_overview["hyperparameters"]["batch_size"]
+        del model_overview["hyperparameters"]["short_side_len"]
+    # Not first training run -> write to metadata overview
+    else: 
+        with open(model_overview_path, "r") as f:
+            model_overview = json.load(f)
+        if metadata["metrics"]["best_epoch_val_mae"] < model_overview["metrics"]["best_epoch_val_mae"]: 
+            model_overview["metrics"]["best_epoch_val_mae"] = metadata["metrics"]["best_epoch_val_mae"] 
+            model_overview["metrics"]["best_epoch"] = model_overview["hyperparameters"]["epochs"] + metadata["metrics"]["best_epoch"] 
+        model_overview["hyperparameters"]["epochs"] += metadata["hyperparameters"]["epochs"]
+        model_overview["metrics"]["train_loss_list"].extend(metadata["metrics"]["train_loss_list"])
+        model_overview["metrics"]["train_mae_list"].extend(metadata["metrics"]["train_mae_list"])
+        model_overview["metrics"]["val_loss_list"].extend(metadata["metrics"]["val_loss_list"])
+        model_overview["metrics"]["val_mae_list"].extend(metadata["metrics"]["val_mae_list"])
+        if model_overview["hyperparameters"]["loss_args"] != metadata["hyperparameters"]["loss_args"]:
+            model_overview["hyperparameters"]["loss_args"] = None
+        if model_overview["hyperparameters"]["loss_fun"] != metadata["hyperparameters"]["loss_fun"]:
+            model_overview["hyperparameters"]["loss_fun"] = None
+        if model_overview["hyperparameters"]["target_map_args"] != metadata["hyperparameters"]["target_map_args"]:
+            model_overview["hyperparameters"]["target_map_args"] = None
+        if model_overview["hyperparameters"]["target_map_fun"] != metadata["hyperparameters"]["target_map_fun"]:
+            model_overview["hyperparameters"]["target_map_fun"] = None
+    
+    # Write number of training runs to model overview
+    model_overview["hyperparameters"]["training_runs"] = model_idx
+
+    # Save model overview
+    with open(model_overview_path, "w") as f:
+        json.dump(model_overview, f, indent=4)
+
 
     # Save the model state_dict()
     model_save_path = model_instance_path / "model.pth"
-    print(f"[INFO] Saving model to: {model_save_path}")
+    print(f"[INFO] Saving model to '{model_save_path}'.")
     torch.save(obj=model.state_dict(),
                 f=model_save_path)
     
     # Save metadata (hyperparams and results)
     metadata_save_path = model_instance_path / "metadata.json"
-    print(f"[INFO] Saving metadata to: {metadata_save_path}")
+    print(f"[INFO] Saving metadata to '{metadata_save_path}'.")
     with open(metadata_save_path, "w") as f:
         json.dump(metadata, f, indent=4)
 
     # Save best cp
     cp_save_path = model_instance_path / "best_cp.pth"
-    print(f"[INFO] Saving best cp to: {cp_save_path}")
+    print(f"[INFO] Saving best cp to '{cp_save_path}'.")
     torch.save(obj=best_cp,
                 f=cp_save_path)
     
@@ -330,15 +367,13 @@ def load_model(model_name,
     # If not otherwise specifiec load model from last training run
     if run_id is None:
         model_list = os.listdir(model_dir_path)
-        model_idx = 1
-        model_instance_id = f"training_run_{model_idx:02d}"
-        while model_instance_id in model_list:
-            model_idx += 1
-            model_instance_id = f"training_run_{model_idx:02d}"
+        idx_list = [int(run[-3:]) for run in model_list if run != "overview.json"]
+        model_idx = max(idx_list)
+        model_instance_id = f"training_run_{model_idx:03d}"
         model_instance_path = model_dir_path / Path(model_instance_id)
     # Else load model with given run id
     else:
-        model_instance_id = f"training_run_{run_id:02d}"
+        model_instance_id = f"training_run_{run_id:03d}"
         model_instance_path = model_dir_path / Path(model_instance_id)
         if not model_instance_path.exists():
             raise FileNotFoundError(f"No model path found for the given run id, i.e. under path '{model_instance_path}'")
@@ -357,39 +392,101 @@ def load_model(model_name,
         metadata = json.load(f)
 
     # Return model if model type matches an implemented model type
-    model_type = metadata["model_type"]
-    if model_type == "density_model":
+    model_type = metadata["hyperparameters"]["model_type"]
+    if model_type == "density_model": 
+        print(f"[INFO] Loaded model from '{model_path}'.")
         model = models.DensityModel()
         model.load_state_dict(torch.load(model_path))
         return model
     else:
         raise TypeError(f"Model type {model_type} unknown. Update of load_model function required.")
     
-def init_model(model_name, model_type):
+def init_model(model_name, model_type, run_id=None, cp="last", target_dir="models"):
+    """
+    Initialize a new model or load an existing model
     
-    # Check if model under name already exists
+    Checks if a model with the given name exists in the target directory. 
+    If it exists, prompts the user to continue training the existing model or exit.
+    If it does not exist, initializes a new model of the specified type.
+    
+    Parameters
+    ----------
+    model_name : str
+        Name of the model to initialize or load.
+    model_type : str
+        Type of model to create if it does not exist.
+    run_id : int or None, optional
+        Identifier of the training run to load. 
+        If None, loads the most recent training run. Default is None.
+    cp : {"last", "best"}, optional
+        Specifies which checkpoint to load when initializing an existing model.
+        Default is "last".
+    target_dir : str, optional
+        Root directory where models are stored. Default is "models".
+    
+    Returns
+    -------
+    model : torch.nn.Module
+        The loaded or newly initialized model.
+    
+    Raises
+    ------
+    InterruptedError
+        If the user chooses to exit instead of continuing training an existing model.
+    TypeError
+        If the model type is not implemented.
+    """
+    # Get list of models from the target_dir (default: "models")
     current_dir = os.getcwd()
-    parent_dir = os.path.dirname(current_dir)
-    models_dir = os.path.join(parent_dir, "models")
-    models = os.listdir(models_dir)
+    if target_dir in os.listdir(current_dir): # Case 1: wd in root dir
+        models_dir = os.path.join(current_dir, target_dir)
+    else: # Case 2: wd in scripts dir
+        parent_dir = os.path.dirname(current_dir)
+        models_dir = os.path.join(parent_dir, target_dir)
+    model_names = os.listdir(models_dir)
 
-    if model_name in models:
+    # Check if model under name already exists
+    if model_name in model_names:
+        # If model exists: Ask user to continue training or exit
         user_in = input("Model with model name alrady exists.\nContinue training (y) existing model or exit (n)?\n [y/n]:")
-
+        
+        # Wait for valid user answer
         while user_in not in ["y","n"]:
             user_in = input("Valid input: {y,n} ({Continue training, exit})\n")
         
+        # Case 1: Exit chosen
         if user_in == "n":
             raise InterruptedError("Exit chosen by user.")
+        # Case 2: Continue training chosen => load model
         else:
-            # Load model
-            model = load_model(model_name)
+            return load_model(model_name, run_id, cp, target_dir)
+    
+    # If model not exists yet, init a new one
     else:
         if model_type == "density_model":
-            model = models.DensityModel()
+            return models.DensityModel()
+        else:
+            raise TypeError(f"Model type {model_type} unknown.")
 
 def parse_train_args():
+    """
+    Parse command-line arguments for training a model.
     
+    Defines and parses hyperparameters for training.
+    
+    Returns
+    -------
+    args : argparse.Namespace
+        Parsed command-line arguments with attributes:
+        - epochs (int): Number of training epochs.
+        - batch_size (int): Batch size for train/val/test.
+        - lr (float): Learning rate.
+        - model_name (str): Name of the saved model file.
+        - weight_decay (float): Weight decay for optimizer.
+        - short_side (int): Short side length for image transformation.
+        - sigma (float): Standard deviation for target density maps.
+        - lbda_count (float): Weight for the count loss.
+    """
     # Creating a parser
     parser = argparse.ArgumentParser(description="Train model")
     
@@ -418,8 +515,51 @@ def parse_train_args():
     parser.add_argument("--lbda-count", type=float, default=0.5,
                         help="Count loss weight")
     
-    
+    return parser.parse_args()
 
-    
 
+def parse_test_args():
+    """
+    Parse command-line arguments for testing a model.
+    
+    Defines and parses hyperparameters for testing.
+    
+    Returns
+    -------
+    args : argparse.Namespace
+        Parsed command-line arguments with attributes:
+        - model_name (str): Name of the saved model file.
+        - batch_size (int): Batch size for train/val/test.
+        - short_side (int): Short side length for image transformation.
+        - sigma (float): Standard deviation for target density maps.
+        - lbda_count (float): Weight for the count loss.
+        - run_id (int): ID of the training run to load model from.
+        - cp (str): "last" or "best" model checkpoint to load.
+    """
+    # Creating a parser
+    parser = argparse.ArgumentParser(description="Test model")
+    
+    # Add parser arguments
+
+    parser.add_argument("--model-name", type=str, default="model0",
+                    help="Saved model filename")
+    
+    parser.add_argument("--batch-size", type=int, default=32,
+                        help="Batch size for train/val/test")
+    
+    parser.add_argument("--short-side", type=int, default=512,
+                        help="Short side len of transformed image")
+    
+    parser.add_argument("--sigma", type=float, default=1,
+                        help="Target density map standard deviation")
+    
+    parser.add_argument("--lbda-count", type=float, default=0.5,
+                        help="Count loss weight")
+    
+    parser.add_argument("--run-id", type=int, default=None,
+                    help="The training run from which to take the model")
+    
+    parser.add_argument("--cp", type=str, default="last",
+                help="Test model after 'last' epoch or in 'best' epoch")
+    
     return parser.parse_args()
