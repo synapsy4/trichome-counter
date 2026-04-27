@@ -27,18 +27,24 @@ if __name__ == "__main__":
     WEIGHT_DECAY = args.weight_decay
     SHORT_SIDE = args.short_side
     MODEL_NAME = args.model_name
+    MODEL_TYPE = args.model_type
+    ACTIVATION = args.activation
+    TARGET_MAP_FUN = args.target_map_fun
+    tmf = generate_density_map if TARGET_MAP_FUN == "generate_density_map" else None
+
+
 
     LAMBDA_COUNT = args.lbda_count
     SIGMA = args.sigma
 
     NUM_WORKERS = 0#os.cpu_count() - 1 
-    MODEL_TYPE = "desnity_model"
 
 
     # Create hyperparameter dict
     hparams = {"model_name": MODEL_NAME,
                 "model_type": MODEL_TYPE,
-                "target_map_fun": "generate_density_map",
+                "activation": ACTIVATION,
+                "target_map_fun": TARGET_MAP_FUN,
                 "target_map_args": {"sigma": SIGMA},
                 "epochs": EPOCHS,
                 "loss_fun": "DensityCountLoss",
@@ -60,13 +66,13 @@ if __name__ == "__main__":
                                     transforms.RandomHorizontalFlip(),
                                     transforms.RandomVerticalFlip(),
                                     transforms.RandomBrightness(0.2)]),
-                            target_map_fun=generate_density_map,
+                            target_map_fun=tmf,
                             sigma=SIGMA) 
     val_ds = TrichomeDataset(root=val_path,
                             transform=transforms.Compose([
                                 transforms.ResizeShortSide(SHORT_SIDE),
                                 transforms.PadToMultipleOf32()]), # NOTE: Add padding s.t. image W of 1023 is padded to 1024 (=divisible by 32)
-                            target_map_fun=generate_density_map,
+                            target_map_fun=tmf,
                             sigma=SIGMA)
     
     # Create dataloaders
@@ -84,7 +90,9 @@ if __name__ == "__main__":
                                 pin_memory=True)
     
     # Init model
-    model = init_model(MODEL_NAME, MODEL_TYPE) 
+    model = init_model(model_name=MODEL_NAME, 
+                       model_type=MODEL_TYPE, 
+                       activation=ACTIVATION) 
 
     # Init loss
     criterion = DensityCountLoss(lambda_count=LAMBDA_COUNT)

@@ -25,9 +25,12 @@ LAMBDA_COUNT = args.lbda_count
 BATCH_SIZE = args.batch_size
 RUN_ID = args.run_id
 CP = args.cp
+TARGET_MAP_FUN = args.target_map_fun
+tmf = generate_density_map if TARGET_MAP_FUN == "generate_density_map" else None
 
 NUM_WORKERS = 0#os.cpu_count() - 1 
 TARGET_DIR = "models"
+
 
 
 
@@ -40,7 +43,7 @@ test_ds = TrichomeDataset(root=test_path,
                             transform=transforms.Compose([
                                 transforms.ResizeShortSide(SHORT_SIDE),
                                 transforms.PadToMultipleOf32()]), # NOTE: Add padding s.t. image W of 1023 is padded to 1024 (=divisible by 32)
-                            target_map_fun=generate_density_map,
+                            target_map_fun=tmf,
                             sigma=SIGMA)
 
 # Create dataloader

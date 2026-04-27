@@ -395,13 +395,13 @@ def load_model(model_name,
     model_type = metadata["hyperparameters"]["model_type"]
     if model_type == "density_model": 
         print(f"[INFO] Loaded model from '{model_path}'.")
-        model = models.DensityModel()
+        model = models.DensityModel(activation=metadata["hyperparameters"]["activation"])
         model.load_state_dict(torch.load(model_path))
         return model
     else:
         raise TypeError(f"Model type {model_type} unknown. Update of load_model function required.")
     
-def init_model(model_name, model_type, run_id=None, cp="last", target_dir="models"):
+def init_model(model_name, model_type, activation="ReLU", run_id=None, cp="last", target_dir="models"):
     """
     Initialize a new model or load an existing model
     
@@ -415,6 +415,8 @@ def init_model(model_name, model_type, run_id=None, cp="last", target_dir="model
         Name of the model to initialize or load.
     model_type : str
         Type of model to create if it does not exist.
+    activation : {"ReLU", "ReLUTanh", "Sigmoid"}, optional
+        Last layer activation function of model. Default is "ReLU".
     run_id : int or None, optional
         Identifier of the training run to load. 
         If None, loads the most recent training run. Default is None.
@@ -464,7 +466,7 @@ def init_model(model_name, model_type, run_id=None, cp="last", target_dir="model
     # If model not exists yet, init a new one
     else:
         if model_type == "density_model":
-            return models.DensityModel()
+            return models.DensityModel(activation=activation)
         else:
             raise TypeError(f"Model type {model_type} unknown.")
 
@@ -482,6 +484,9 @@ def parse_train_args():
         - batch_size (int): Batch size for train/val/test.
         - lr (float): Learning rate.
         - model_name (str): Name of the saved model file.
+        - model_type (str): Type of model to use.
+        - activation (str): Last layer activation of model.
+        - target_map_fun (str): Function id to create target map.
         - weight_decay (float): Weight decay for optimizer.
         - short_side (int): Short side length for image transformation.
         - sigma (float): Standard deviation for target density maps.
@@ -502,9 +507,18 @@ def parse_train_args():
 
     parser.add_argument("--model-name", type=str, default="model0",
                         help="Saved model filename")
+        
+    parser.add_argument("--model-type", type=str, default="density-model",
+                        help="Type of model")
+    
+    parser.add_argument("--activation", type=str, default="ReLU",
+                        help="Last layer activation")
+
+    parser.add_argument("--target-map-fun", type=str, default="generate_density_map",
+                        help="Function id to create target map")
     
     parser.add_argument("--weight-decay", type=float, default=1e-4,
-                    help="Weight decay")
+                        help="Weight decay")
     
     parser.add_argument("--short-side", type=int, default=512,
                         help="Short side len of transformed image")
@@ -531,6 +545,7 @@ def parse_test_args():
         - model_name (str): Name of the saved model file.
         - batch_size (int): Batch size for train/val/test.
         - short_side (int): Short side length for image transformation.
+        - target_map_fun (str): Function id to create target map.
         - sigma (float): Standard deviation for target density maps.
         - lbda_count (float): Weight for the count loss.
         - run_id (int): ID of the training run to load model from.
@@ -552,6 +567,9 @@ def parse_test_args():
     
     parser.add_argument("--sigma", type=float, default=1,
                         help="Target density map standard deviation")
+    
+    parser.add_argument("--target-map-fun", type=str, default="generate_density_map",
+                    help="Function id to create target map")
     
     parser.add_argument("--lbda-count", type=float, default=0.5,
                         help="Count loss weight")

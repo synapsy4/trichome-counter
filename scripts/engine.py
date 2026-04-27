@@ -1,6 +1,7 @@
 """
 Train, validate and inference functions.
 """
+
 import torch
 from . import utils
 from tqdm.auto import tqdm
@@ -192,7 +193,7 @@ def train(model, model_name, train_dataloader, val_dataloader, epochs, optimizer
         val_mae_list.append(val_mae)
         
         # Print status
-        print(f"Epoch {epoch:03d} | Train-loss={train_loss:.0f}, train-mae={train_mae:.0f} | Val-loss={val_loss:.0f}, val-mae={val_mae:.0f}")
+        print(f"Epoch {epoch:03d} | Train-loss={train_loss:.2f}, train-mae={train_mae:.2f} | Val-loss={val_loss:.2f}, val-mae={val_mae:.2f}")
 
     # Write metric dict
     metrics = {

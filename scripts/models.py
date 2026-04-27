@@ -13,8 +13,19 @@ class DensityModel(nn.Module):
     Uses a ResNet34 encoder (ImageNet pretrained) and outputs
     a single-channel density map. ReLU activation ensures
     non-negative density predictions.
+
+    Parameters
+    ----------
+    activation : {"ReLU", "ReLUTanh", "Sigmoid"}, optional
+        Last layer activation function, default "ReLU".
+
+    Raises
+    ------
+    TypeError
+        If the activation type is not implemented.
+
     """
-    def __init__(self):
+    def __init__(self, activation="ReLU"):
         super().__init__()
 
         # Base U-Net model for fully convolutional regression
@@ -30,8 +41,16 @@ class DensityModel(nn.Module):
                             )
         # Enforce non-negative density values
         # Density maps represent counts → must be >= 0
-        self.relu = nn.ReLU(inplace=True)
-        self.tanh = nn.Tanh()
+        if activation == "ReLU":
+            self.activation = nn.ReLU(inplace=True)
+        elif activation == "ReLUTanh":
+            self.activation = nn.Sequential(nn.ReLU(inplace=True), 
+                                            nn.Tanh())
+        elif activation == "Sigmoid":
+            self.activation = nn.Sigmoid()
+        else: 
+            raise TypeError(f"Activation function type {activation} not known.")
+        
 
     def forward(self, x):
         """
@@ -47,4 +66,4 @@ class DensityModel(nn.Module):
         torch.Tensor
             Predicted density maps (B, 1, H, W)
         """
-        return self.tanh(self.relu(self.base_model(x)))
+        return self.activation(self.base_model(x))
