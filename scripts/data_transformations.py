@@ -2,9 +2,12 @@
 """
 Custom transformation classes to transform images and coordinates.
 """
+
+import random
+from typing import Callable
+
 import torch
 import torch.nn.functional as F
-import random
 
 class Compose:
     """
@@ -20,10 +23,13 @@ class Compose:
     __call__(image, coords)
         Apply all transforms in sequence to image and coordinates.
     """
-    def __init__(self, transforms):
+    def __init__(self, transforms: list[Callable]) -> None:
         self.transforms = transforms
 
-    def __call__(self, image, coords):
+    def __call__(self, 
+                 image: torch.Tensor, 
+                 coords: torch.Tensor
+                 ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Apply all transforms sequentially.
 
@@ -61,10 +67,13 @@ class ResizeShortSide:
     __call__(image, coords)
         Resize image and scale point coordinates proportionally.
     """
-    def __init__(self, short_side):
+    def __init__(self, short_side: int) -> None:
         self.short_side = short_side
 
-    def __call__(self, image, coords):
+    def __call__(self, 
+                 image: torch.Tensor, 
+                 coords: torch.Tensor
+                 ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Resize image and scale coordinates.
 
@@ -125,11 +134,17 @@ class RandomCrop:
     RuntimeError
         If crop size is larger than image dimensions.
     """
-    def __init__(self, crop_w, crop_h):
+    def __init__(self, 
+                 crop_w: int, 
+                 crop_h: int
+                 ) -> None:
         self.crop_w = crop_w
         self.crop_h = crop_h
 
-    def __call__(self, image, coords):
+    def __call__(self, 
+                 image: torch.Tensor, 
+                 coords: torch.Tensor
+                 ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Apply random crop to image and coordinates.
 
@@ -199,10 +214,13 @@ class RandomHorizontalFlip:
     __call__(image, coords)
         Apply random horizontal flip to image and coordinates.
     """
-    def __init__(self, p=0.5):
+    def __init__(self, p: float = 0.5) -> None:
         self.p = p
 
-    def __call__(self, image, coords):
+    def __call__(self, 
+                 image: torch.Tensor, 
+                 coords: torch.Tensor
+                 ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Apply random horizontal flip.
 
@@ -250,10 +268,13 @@ class RandomVerticalFlip:
     __call__(image, coords)
         Apply random vertical flip to image and coordinates.
     """
-    def __init__(self, p=0.5):
+    def __init__(self, p: float = 0.5) -> None:
         self.p = p
 
-    def __call__(self, image, coords):
+    def __call__(self, 
+                 image: torch.Tensor, 
+                 coords: torch.Tensor
+                 ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Apply random vertical flip.
 
@@ -305,10 +326,13 @@ class RandomBrightness:
         Adjust brightness without modifying coordinates.
     """
 
-    def __init__(self, brightness_factor=0.2):
+    def __init__(self, brightness_factor: float = 0.2) -> None:
         self.brightness_factor = brightness_factor
 
-    def __call__(self, image, coords):
+    def __call__(self, 
+                 image: torch.Tensor, 
+                 coords: torch.Tensor
+                 ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Adjust image brightness.
 
@@ -353,10 +377,13 @@ class RandomRotate90:
     __call__(image, coords)
         Apply random 90° rotation to image and coordinates.
     """
-    def __init__(self, p=0.5):
+    def __init__(self, p: float = 0.5) -> None:
         self.p = p
 
-    def __call__(self, image, coords):
+    def __call__(self, 
+                 image: torch.Tensor, 
+                 coords: torch.Tensor
+                 ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Apply random 90° clockwise rotation.
 
@@ -378,7 +405,7 @@ class RandomRotate90:
         if torch.rand(1).item() > self.p:
             return image, coords
 
-        _, H, W = image.shape
+        _, H, _ = image.shape
 
         # Rotate image 90° clockwise
         image = torch.rot90(image, k=-1, dims=[1, 2])
@@ -414,7 +441,10 @@ class PadToMultipleOf32:
         Pad image spatial dimensions to next multiple of 32.
     """
 
-    def __call__(self, image, coords):
+    def __call__(self, 
+                 image: torch.Tensor, 
+                 coords: torch.Tensor
+                 ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Pad image to nearest multiple of 32.
 

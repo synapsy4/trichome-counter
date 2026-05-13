@@ -2,6 +2,7 @@
 Contains PyTorch model code to instantiate models.
 """
 
+import torch
 import torch.nn as nn
 import segmentation_models_pytorch as smp
 
@@ -25,7 +26,7 @@ class DensityModel(nn.Module):
         If the activation type is not implemented.
 
     """
-    def __init__(self, activation="ReLU"):
+    def __init__(self, activation: str = "ReLU") -> None:
         super().__init__()
 
         # Base U-Net model for fully convolutional regression
@@ -52,7 +53,7 @@ class DensityModel(nn.Module):
             raise TypeError(f"Activation function type {activation} not known.")
         
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass.
 

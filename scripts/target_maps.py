@@ -2,11 +2,20 @@
 Functions to generate and visualize target maps based on trichome coordinates.
 """
 
+from typing import Any
+
 import torch
+import matplotlib
 import matplotlib.pyplot as plt
 
 
-def generate_density_map(coords, H, W, sigma, *target_map_args, **target_map_kwargs):
+def generate_density_map(coords: torch.Tensor, 
+                         H: int, 
+                         W: int, 
+                         sigma: float, 
+                         *target_map_args: Any, 
+                         **target_map_kwargs: Any
+                         ) -> torch.Tensor:
     """
     Generate a 2D Gaussian density map from point coordinates.
 
@@ -76,7 +85,16 @@ def generate_density_map(coords, H, W, sigma, *target_map_args, **target_map_kwa
     return density
 
 
-def generate_density_map_adaptive(coords, H, W, k=3, beta=0.4, sigma_min=2.0, sigma_max=12.0, *target_map_args, **target_map_kwargs):
+def generate_density_map_adaptive(coords: torch.Tensor, 
+                                  H: int, 
+                                  W: int, 
+                                  k: int = 3, 
+                                  beta: float = 0.4, 
+                                  sigma_min: float = 2.0, 
+                                  sigma_max: float = 12.0, 
+                                  *target_map_args: Any, 
+                                  **target_map_kwargs: Any
+                                  ) -> torch.Tensor:
     """
     Generate adaptive Gaussian density map using kNN-based sigma.
 
@@ -156,7 +174,12 @@ def generate_density_map_adaptive(coords, H, W, k=3, beta=0.4, sigma_min=2.0, si
     return density
 
 
-def plot_density_map(img, density, alpha=0.5, title="", ax=None):
+def plot_density_map(img: torch.Tesnor, 
+                     density: torch.Tesnor, 
+                     alpha: float = 0.5, 
+                     title: str = "", 
+                     ax: matplotlib.axes.Axes = None
+                     ) -> None:
     """
     Visualize a density map overlaid on an image.
 
@@ -168,13 +191,15 @@ def plot_density_map(img, density, alpha=0.5, title="", ax=None):
         2D density map to overlay using jet colormap.
     alpha : float, optional
         Transparency level for density overlay (default: 0.5).
+    title : str, optional
+        Plot title.
     ax : matplotlib.axes.Axes, optional
         Matplotlib axes object to plot on. If None, creates a new figure with
         size (10, 5). Default is None.
     """
     # If no axes provided, create one
     if ax is None:
-        fig, ax = plt.subplots(figsize=(10,5))
+        _, ax = plt.subplots(figsize=(10,5))
     # Plot image
     ax.imshow(img)
     # Overlay density map with transparency

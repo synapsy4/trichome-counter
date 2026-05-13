@@ -3,22 +3,24 @@ Functions to preprocess raw data, and class for creating custom PyTorch dataset.
 """
 
 from pathlib import Path
-import scipy.io as sio
 import random
+from typing import Callable, Any
+
 import numpy as np
 import cv2
 from tqdm.auto import tqdm
+import scipy.io as sio
 import torch
 from torch.utils.data import Dataset
 
 
 def split_filenames(
-        raw_root,
-        train_ratio=0.7,
-        val_ratio=0.15,
-        stratify=True,
-        seed=42
-        ):
+        raw_root: Path,
+        train_ratio: float = 0.7,
+        val_ratio: float = 0.15,
+        stratify: bool = True,
+        seed: int = 42
+        ) -> dict:
     """
     Split file IDs into train/val/test sets with random shuffling.
 
@@ -120,7 +122,7 @@ def split_filenames(
 def process_single_image(
         data_path: Path,
         data_id: str
-        ):
+        ) -> tuple[np.ndarray, np.ndarray, tuple[int, int]]:
     """
     Extract ROI from image and adjust trichome coordinates to ROI bounds.
 
@@ -211,7 +213,9 @@ def process_single_image(
     return new_img, coords, (rect_w, rect_h)
 
 
-def preprocess_dataset(raw_root: Path, out_root: Path):
+def preprocess_dataset(raw_root: Path, 
+                       out_root: Path
+                       ) -> None:
     """
     Process dataset by splitting files and extracting ROIs with coordinates.
 
@@ -297,7 +301,13 @@ class TrichomeDataset(Dataset):
     __getitem__(idx)
         Get image, target map, and coordinates for given index.
     """
-    def __init__(self, root, target_map_fun, transform=None, *target_map_args, **target_map_kwargs):
+    def __init__(self, 
+                 root: str | Path, 
+                 target_map_fun: Callable, 
+                 transform: Callable = None, 
+                 *target_map_args: Any, 
+                 **target_map_kwargs: Any
+                 ) -> None:
         self.root = Path(root)
         self.transform = transform
         self.target_map_fun = target_map_fun
@@ -305,7 +315,7 @@ class TrichomeDataset(Dataset):
         self.target_map_kwargs = target_map_kwargs
         self.images = sorted((self.root / "images").glob("*.jpg"))
 
-    def __len__(self):
+    def __len__(self) -> int:
         """
         Return the total number of samples in the dataset.
 
@@ -316,7 +326,9 @@ class TrichomeDataset(Dataset):
         """
         return len(self.images)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, 
+                    idx: int
+                    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Get a single sample from the dataset.
 

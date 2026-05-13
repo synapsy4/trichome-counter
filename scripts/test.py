@@ -2,17 +2,18 @@
 Testing a trichome counter model.
 """
 
-from pathlib import Path
-from .utils import collate_fn, parse_test_args, load_model
-from .target_maps import generate_density_map
-from .engine import validate
-from .data_setup import TrichomeDataset
-from .loss import DensityCountLoss
-from . import data_transformations as transforms
-
 import torch
-from torch.utils.data import DataLoader
 from matplotlib import pyplot as plt
+from torch.utils.data import DataLoader
+
+import data_transformations as transforms
+from pathlib import Path
+from utils import collate_fn, parse_test_args, load_model
+from target_maps import generate_density_map
+from engine import validate
+from data_setup import TrichomeDataset
+from loss import DensityCountLoss
+
 
 
 # Setup hyperparameters
@@ -28,7 +29,6 @@ CP = args.cp
 TARGET_MAP_FUN = args.target_map_fun
 tmf = generate_density_map if TARGET_MAP_FUN == "generate_density_map" else None
 
-NUM_WORKERS = 0#os.cpu_count() - 1 
 TARGET_DIR = "models"
 
 
@@ -50,9 +50,7 @@ test_ds = TrichomeDataset(root=test_path,
 test_dataloader = DataLoader(dataset=test_ds,
                                 batch_size=BATCH_SIZE,
                                 shuffle=True,
-                                num_workers=NUM_WORKERS,
-                                collate_fn=collate_fn,
-                                pin_memory=True)
+                                collate_fn=collate_fn)
 
 # Init model
 model = load_model(MODEL_NAME, RUN_ID, CP, TARGET_DIR) 

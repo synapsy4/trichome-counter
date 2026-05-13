@@ -3,20 +3,25 @@ Utility functions.
 """
 
 import os
+import random
 from pathlib import Path
 import json
-import scipy.io as sio
 import argparse
+from typing import Any
+from collections import OrderedDict
 
-import random
 import numpy as np
 import cv2
 import torch
+import matplotlib
 import matplotlib.pyplot as plt
+import scipy.io as sio
 
-from . import models
+import models
 
-def get_random_data_paths(seed=None):
+
+def get_random_data_paths(seed: int = None
+                          ) -> tuple[Path, Path, Path, Path]:
     """
     Get random file paths for raw and preprocessed image and coordinate data.
 
@@ -65,7 +70,9 @@ def get_random_data_paths(seed=None):
 
 
 
-def load_raw_image_data(image_path_raw,coord_path_raw):
+def load_raw_image_data(image_path_raw: str | Path,
+                        coord_path_raw: str | Path
+                        ) -> tuple[np.ndarray, float, float, float, float, np.ndarray]:
     """
     Load raw image and coordinate data from file paths.
     
@@ -113,7 +120,9 @@ def load_raw_image_data(image_path_raw,coord_path_raw):
 
 
 
-def load_preprocessed_image_data(image_path_pre,coord_path_pre):
+def load_preprocessed_image_data(image_path_pre: str | Path,
+                                 coord_path_pre: str | Path
+                                 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Load preprocessed image and coordinate data from file paths.
     
@@ -141,7 +150,11 @@ def load_preprocessed_image_data(image_path_pre,coord_path_pre):
     return img_pre, coords_pre
 
 
-def plot_data_instance(img, coords, title="", ax=None):
+def plot_data_instance(img: np.ndarray | torch.Tensor, 
+                       coords: np.ndarray | torch.Tensor, 
+                       title: str = "", 
+                       ax: matplotlib.axes.Axes = None
+                       ) -> None:
     """
     Plot an image with overlaid coordinate points.
     
@@ -164,7 +177,7 @@ def plot_data_instance(img, coords, title="", ax=None):
     """
     # If no axes provided, create one
     if ax is None:
-        fig, ax = plt.subplots(figsize=(10,5))
+        _, ax = plt.subplots(figsize=(10,5))
     # Plot image
     ax.imshow(img)
     # Plot coordinates if given
@@ -175,7 +188,9 @@ def plot_data_instance(img, coords, title="", ax=None):
     ax.axis("off")
 
 
-def collate_fn(batch):
+def collate_fn(
+        batch: list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]
+        ) -> tuple[torch.Tensor, torch.Tensor, list[torch.Tensor]]:
     """
     Custom collate function for batching dataset samples.
     
@@ -208,11 +223,12 @@ def collate_fn(batch):
     return images, target_maps, coords  # coords = list of tensors
 
 
-def save_model(model,
-               model_name,
-               metadata,
-               best_cp,
-               target_dir="models"):
+def save_model(model: torch.nn.Module,
+               model_name: str,
+               metadata: dict[str, Any],
+               best_cp: OrderedDict[str, torch.Tensor],
+               target_dir: str | Path = "models"
+               ) -> None:
     """
     Saves a PyTorch model and its metadata.
 
@@ -290,7 +306,6 @@ def save_model(model,
     with open(model_overview_path, "w") as f:
         json.dump(model_overview, f, indent=4)
 
-
     # Save the model state_dict()
     model_save_path = model_instance_path / "model.pth"
     print(f"[INFO] Saving model to '{model_save_path}'.")
@@ -310,10 +325,11 @@ def save_model(model,
                 f=cp_save_path)
     
 
-def load_model(model_name,
-               run_id=None,
-               cp="last",
-               target_dir="models"):
+def load_model(model_name: str,
+               run_id: int = None,
+               cp: str = "last",
+               target_dir: str | Path = "models"
+               ) -> torch.nn.Module:
     """
     Load a trained model instance and its corresponding checkpoint from disk.
 
@@ -330,7 +346,7 @@ def load_model(model_name,
         - "last": Loads the final saved model weights ("model.pth").
         - "best": Loads the best validation checkpoint ("best_cp.pth").
         Default is "last".
-    target_dir : str or pathlib.Path, optional
+    target_dir : str or Path, optional
         Root directory where models are stored.
         Default is "models".
 
@@ -401,7 +417,13 @@ def load_model(model_name,
     else:
         raise TypeError(f"Model type {model_type} unknown. Update of load_model function required.")
     
-def init_model(model_name, model_type, activation="ReLU", run_id=None, cp="last", target_dir="models"):
+def init_model(model_name: str, 
+               model_type: str, 
+               activation: str = "ReLU", 
+               run_id: int = None, 
+               cp: str = "last", 
+               target_dir: str = "models"
+               ) -> torch.nn.Module:
     """
     Initialize a new model or load an existing model
     
@@ -470,7 +492,7 @@ def init_model(model_name, model_type, activation="ReLU", run_id=None, cp="last"
         else:
             raise TypeError(f"Model type {model_type} unknown.")
 
-def parse_train_args():
+def parse_train_args() -> argparse.Namespace:
     """
     Parse command-line arguments for training a model.
     
@@ -532,7 +554,7 @@ def parse_train_args():
     return parser.parse_args()
 
 
-def parse_test_args():
+def parse_test_args() -> argparse.Namespace:
     """
     Parse command-line arguments for testing a model.
     

@@ -3,15 +3,17 @@ Training of a trichome counter model.
 """
 
 from pathlib import Path
-from engine import train
-from utils import collate_fn, parse_train_args, init_model
-from target_maps import generate_density_map
-from data_setup import TrichomeDataset
-from loss import DensityCountLoss
-import data_transformations as transforms
 
 import torch
 from torch.utils.data import DataLoader
+
+import data_transformations as transforms
+from data_setup import TrichomeDataset
+from loss import DensityCountLoss
+from engine import train
+from utils import collate_fn, parse_train_args, init_model
+from target_maps import generate_density_map
+
 
 
 
@@ -32,12 +34,8 @@ if __name__ == "__main__":
     TARGET_MAP_FUN = args.target_map_fun
     tmf = generate_density_map if TARGET_MAP_FUN == "generate_density_map" else None
 
-
-
     LAMBDA_COUNT = args.lbda_count
     SIGMA = args.sigma
-
-    NUM_WORKERS = 0#os.cpu_count() - 1 
 
 
     # Create hyperparameter dict
@@ -79,15 +77,11 @@ if __name__ == "__main__":
     train_dataloader = DataLoader(dataset=train_ds,
                                 batch_size=BATCH_SIZE,
                                 shuffle=True,
-                                num_workers=NUM_WORKERS,
-                                collate_fn=collate_fn,
-                                pin_memory=True)
+                                collate_fn=collate_fn)
     val_dataloader = DataLoader(dataset=val_ds,
                                 batch_size=BATCH_SIZE,
                                 shuffle=True,
-                                num_workers=NUM_WORKERS,
-                                collate_fn=collate_fn,
-                                pin_memory=True)
+                                collate_fn=collate_fn)
     
     # Init model
     model = init_model(model_name=MODEL_NAME, 
@@ -98,7 +92,7 @@ if __name__ == "__main__":
     criterion = DensityCountLoss(lambda_count=LAMBDA_COUNT)
 
     # Init optimizer
-    optimizer = torch.optim.AdamW( # AdamW stable for encoder-decoder architectures
+    optimizer = torch.optim.AdamW( 
         model.parameters(),
         lr=LEARNING_RATE,
         weight_decay=WEIGHT_DECAY

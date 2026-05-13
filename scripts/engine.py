@@ -2,11 +2,19 @@
 Train, validate and inference functions.
 """
 
-import torch
-from . import utils
-from tqdm.auto import tqdm
+from typing import Any 
 
-def train_one_epoch(model, dataloader, optimizer, criterion, device):
+from tqdm.auto import tqdm
+import torch
+
+import utils
+
+def train_one_epoch(model: torch.nn.Module, 
+                    dataloader: torch.utils.data.DataLoader, 
+                    optimizer: torch.optim.Optimizer, 
+                    criterion: torch.nn.Module, 
+                    device: torch.device
+                    ) -> tuple[float, float]:
     """
     Train model for one epoch.
 
@@ -56,8 +64,11 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device):
     )
 
 
-@torch.no_grad()
-def validate(model, dataloader, criterion, device):
+def validate(model: torch.nn.Module, 
+             dataloader: torch.utils.data.DataLoader, 
+             criterion: torch.nn.Module, 
+             device: torch.device
+             ) -> tuple[float, float, list[torch.Tensor], list[torch.Tensor]]:
     """
     Evaluate a model on a validation or test dataset.
     
@@ -97,29 +108,30 @@ def validate(model, dataloader, criterion, device):
     pred_counts = []
 
     # Loop through batches
-    for images, gt_density, _ in dataloader:
+    with torch.inference_mode():
+        for images, gt_density, _ in dataloader:
 
-        images = images.to(device)
-        gt_density = gt_density.to(device)
+            images = images.to(device)
+            gt_density = gt_density.to(device)
 
-        # Forward pass
-        pred_density = model(images)
+            # Forward pass
+            pred_density = model(images)
 
-        # Compute loss
-        loss, _, _ = criterion(pred_density, gt_density)
+            # Compute loss
+            loss, _, _ = criterion(pred_density, gt_density)
 
-        total_loss+= loss.item()
+            total_loss+= loss.item()
 
-        # Monitor count-level MAE
-        pred_count = pred_density.sum(dim=[1, 2, 3])
-        gt_count = gt_density.sum(dim=[1, 2, 3])
+            # Monitor count-level MAE
+            pred_count = pred_density.sum(dim=[1, 2, 3])
+            gt_count = gt_density.sum(dim=[1, 2, 3])
 
-        mae = torch.abs(pred_count - gt_count).mean()
-        total_mae += mae.item()
+            mae = torch.abs(pred_count - gt_count).mean()
+            total_mae += mae.item()
 
-        # Update counts
-        gt_counts.extend(gt_count)
-        pred_counts.extend(pred_count)
+            # Update counts
+            gt_counts.extend(gt_count)
+            pred_counts.extend(pred_count)
 
     return (
         total_loss / len(dataloader),
@@ -128,7 +140,16 @@ def validate(model, dataloader, criterion, device):
         pred_counts
     )
 
-def train(model, model_name, train_dataloader, val_dataloader, epochs, optimizer, criterion, hparams, device):
+def train(model: torch.nn.Module, 
+          model_name: str, 
+          train_dataloader: torch.utils.data.DataLoader, 
+          val_dataloader: torch.utils.data.DataLoader, 
+          epochs: int, 
+          optimizer: torch.optim.Optimizer, 
+          criterion: torch.nn.Module, 
+          hparams: dict[str, Any], 
+          device: torch.device
+          ) -> None:
     """
     Train a model for a specified number of epochs and track performance metrics.
 

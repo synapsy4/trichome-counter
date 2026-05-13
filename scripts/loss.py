@@ -1,5 +1,6 @@
 "Custom loss function classes."
 
+import torch
 import torch.nn as nn
 
 
@@ -13,7 +14,7 @@ class DensityCountLoss(nn.Module):
     - L1 count loss directly optimizes total object count
     """
 
-    def __init__(self, lambda_count=0.5):
+    def __init__(self, lambda_count: float = 0.5):
         super().__init__()
 
         # Weight for count loss contribution
@@ -25,7 +26,10 @@ class DensityCountLoss(nn.Module):
         # Robust absolute error for count
         self.l1 = nn.L1Loss()
 
-    def forward(self, pred_density, gt_density):
+    def forward(self, 
+                pred_density: torch.Tensor, 
+                gt_density: torch.Tensor
+                ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Compute combined loss.
 
