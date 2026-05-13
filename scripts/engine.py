@@ -7,7 +7,7 @@ from typing import Any
 from tqdm.auto import tqdm
 import torch
 
-import utils
+from scripts import utils
 
 def train_one_epoch(model: torch.nn.Module, 
                     dataloader: torch.utils.data.DataLoader, 

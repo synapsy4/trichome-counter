@@ -5,17 +5,11 @@ Training of a trichome counter model.
 from pathlib import Path
 
 import torch
-from torch.utils.data import DataLoader
 
-import data_transformations as transforms
-from data_setup import TrichomeDataset
-from loss import DensityCountLoss
-from engine import train
-from utils import collate_fn, parse_train_args, init_model
-from target_maps import generate_density_map
-
-
-
+from scripts.loss import DensityCountLoss
+from scripts.data import get_dataloader
+from scripts.engine import train
+from scripts.utils import parse_train_args, init_model
 
 
 if __name__ == "__main__":
@@ -32,7 +26,6 @@ if __name__ == "__main__":
     MODEL_TYPE = args.model_type
     ACTIVATION = args.activation
     TARGET_MAP_FUN = args.target_map_fun
-    tmf = generate_density_map if TARGET_MAP_FUN == "generate_density_map" else None
 
     LAMBDA_COUNT = args.lbda_count
     SIGMA = args.sigma
@@ -52,10 +45,12 @@ if __name__ == "__main__":
                 "batch_size": BATCH_SIZE,
                 "short_side_len": SHORT_SIDE}
         
+    
     # Set data paths
     train_path = Path("data/preprocessed/train")
     val_path = Path("data/preprocessed/val")
 
+    """
     # Create datasets
     train_ds = TrichomeDataset(root=train_path,  
                             transform=transforms.Compose(
@@ -82,6 +77,14 @@ if __name__ == "__main__":
                                 batch_size=BATCH_SIZE,
                                 shuffle=True,
                                 collate_fn=collate_fn)
+    """
+    
+    cfg = {"training": {"batch_size": BATCH_SIZE, "target_map_fun": TARGET_MAP_FUN, "target_map_args": SIGMA}, 
+           "transforms": {"short_side": SHORT_SIDE, "crop": SHORT_SIDE, "brightness": 0.2}, 
+           "paths": {"train_path": train_path, "val_path": val_path}}
+    train_dataloader = get_dataloader(split="train", cfg=cfg)
+    val_dataloader = get_dataloader(split="val", cfg=cfg)
+   
     
     # Init model
     model = init_model(model_name=MODEL_NAME, 

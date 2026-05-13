@@ -1,5 +1,5 @@
 """
-Functions to preprocess raw data, and class for creating custom PyTorch dataset.
+Functions to preprocess raw data
 """
 
 from pathlib import Path
@@ -8,10 +8,10 @@ from typing import Callable, Any
 
 import numpy as np
 import cv2
-from tqdm.auto import tqdm
 import scipy.io as sio
 import torch
 from torch.utils.data import Dataset
+from tqdm.auto import tqdm
 
 
 def split_filenames(
@@ -265,105 +265,3 @@ def preprocess_dataset(raw_root: Path,
             # Save data
             cv2.imwrite(str(img_out / f"{fid}.jpg"), img)
             np.save(coords_out / f"{fid}.npy", coords)
-
-
-class TrichomeDataset(Dataset):
-    """
-    PyTorch Dataset for trichome detection with customizable target map generation.
-
-    Loads images and point coordinates, applies transformations, and generates
-    target maps (e.g., density maps, heatmaps) using a provided target map function.
-
-    Parameters
-    ----------
-    root : str or Path
-        Root directory containing 'images/' and 'coords/' subdirectories.
-    target_map_fun : callable
-        Function to generate target maps from coordinates. Must have signature
-        target_map_fun(coords, H, W, *args, **kwargs) and return a tensor.
-    transform : callable, optional
-        Transform to apply to images and coordinates (default: None).
-    *target_map_args
-        Positional arguments to pass to target_map_fun (e.g., sigma for Gaussian
-        density maps).
-    **target_map_kwargs
-        Keyword arguments to pass to target_map_fun.
-
-    Attributes
-    ----------
-    images : list of Path
-        Sorted list of image file paths.
-
-    Methods
-    -------
-    __len__()
-        Return number of samples in dataset.
-    __getitem__(idx)
-        Get image, target map, and coordinates for given index.
-    """
-    def __init__(self, 
-                 root: str | Path, 
-                 target_map_fun: Callable, 
-                 transform: Callable = None, 
-                 *target_map_args: Any, 
-                 **target_map_kwargs: Any
-                 ) -> None:
-        self.root = Path(root)
-        self.transform = transform
-        self.target_map_fun = target_map_fun
-        self.target_map_args = target_map_args
-        self.target_map_kwargs = target_map_kwargs
-        self.images = sorted((self.root / "images").glob("*.jpg"))
-
-    def __len__(self) -> int:
-        """
-        Return the total number of samples in the dataset.
-
-        Returns
-        -------
-        int
-            Number of images in the dataset.
-        """
-        return len(self.images)
-
-    def __getitem__(self, 
-                    idx: int
-                    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Get a single sample from the dataset.
-
-        Parameters
-        ----------
-        idx : int
-            Index of the sample to retrieve.
-
-        Returns
-        -------
-        img : torch.Tensor
-            RGB image array, normalized to [0, 1].
-        target_map : torch.Tensor
-            Generated target map from the provided target_map_fun.
-        coords : torch.Tensor
-            Nx2 tensor of trichome (x,y)-coordinates.
-        """
-        # Construct file paths
-        img_path = self.images[idx]
-        coord_path = self.root / "coords" / f"{img_path.stem}.npy"
-
-        # Load image and convert to RGB + load coordinates + transform to tensors
-        img = cv2.imread(str(img_path))
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        coords = np.load(coord_path)
-        img = torch.from_numpy(img).permute(2, 0, 1).float() / 255.0
-        coords = torch.from_numpy(coords).float()
-
-        # Apply transforms if provided
-        if self.transform:
-            img, coords = self.transform(img, coords)
-
-        # Generate target map from coordinates
-        _, H, W = img.shape
-        target_map = self.target_map_fun(coords, H, W, *self.target_map_args, **self.target_map_kwargs)
-        target_map = target_map.unsqueeze(0) # Add dim s.t. target maps are later of dim (B,1,H,W) matching model output
-
-        return img, target_map, coords

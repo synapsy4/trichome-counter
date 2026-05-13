@@ -17,7 +17,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import scipy.io as sio
 
-import models
+from scripts import models
 
 
 def get_random_data_paths(seed: int = None

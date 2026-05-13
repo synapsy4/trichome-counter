@@ -174,8 +174,8 @@ def generate_density_map_adaptive(coords: torch.Tensor,
     return density
 
 
-def plot_density_map(img: torch.Tesnor, 
-                     density: torch.Tesnor, 
+def plot_density_map(img: torch.Tensor, 
+                     density: torch.Tensor, 
                      alpha: float = 0.5, 
                      title: str = "", 
                      ax: matplotlib.axes.Axes = None
