@@ -1,4 +1,8 @@
-"Custom loss function classes."
+"""
+Custom loss function classes.
+"""
+
+from typing import Any
 
 import torch
 import torch.nn as nn

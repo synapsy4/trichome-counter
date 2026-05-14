@@ -120,45 +120,62 @@ class TrichomeDataset(Dataset):
     
 
 
-    def get_dataloader(split: str,
-                       cfg: dict[str, Any]
-                       ) -> torch.utils.data.DataLoader:
-        """
-        TODO: Add function info.
-        """
+def get_dataloader(split: str,
+                    cfg: dict[str, Any]
+                    ) -> torch.utils.data.DataLoader:
+    """
+    TODO: Add function info.
+    """
 
-        # Set target map function 
-        tmf = generate_density_map if cfg.training.target_map_fun == "generate_density_map" else None
+    # Set target map function 
+    if cfg["target_map"]["target_map_fun"] == "generate_density_map":
+        tmf = generate_density_map
+    else:
+        raise KeyError("Unknown target map function. SPecify existing target map function in config file.")
 
-        if split == "train":
-            # Create dataset
-            ds = TrichomeDataset(root=cfg.paths.train_path,  
-                            transform=transforms.Compose(
-                                [transforms.ResizeShortSide(cfg.transforms.short_side),
-                                    transforms.RandomHorizontalFlip(),
-                                    transforms.RandomVerticalFlip(),
-                                    transforms.RandomBrightness(cfg.transforms.brightness)]),
-                            target_map_fun=tmf,
-                            sigma=cfg.training.target_map_args) 
-            # Create dataloader
-            dataloader = DataLoader(dataset=ds,
-                                batch_size=cfg.training.batch_size,
-                                shuffle=True,
-                                collate_fn=collate_fn)
-        elif split == "val" or split == "test":
-            # Create dataset
-            ds = TrichomeDataset(root=cfg.paths.train_path,  
-                            transform=transforms.Compose(
-                                [transforms.ResizeShortSide(cfg.transforms.short_side),
-                                 transforms.PadToMultipleOf32()]),
-                            target_map_fun=tmf,
-                            sigma=cfg.training.target_map_args) 
-            # Create dataloader
-            dataloader = DataLoader(dataset=ds,
-                                batch_size=cfg.training.batch_size,
-                                shuffle=False,
-                                collate_fn=collate_fn)
-        else:
-            raise KeyError("split must be one of {'train', 'val', 'test'}.")
+    # Create dataloader for specified split type
+    if split == "train":
+        # Create dataset
+        ds = TrichomeDataset(root=cfg["paths"]["train_data"],  
+                        transform=transforms.Compose(
+                            [transforms.ResizeShortSide(cfg["transforms"]["short_side"]),
+                                transforms.RandomHorizontalFlip(),
+                                transforms.RandomVerticalFlip(),
+                                transforms.RandomBrightness(cfg["transforms"]["brightness"])]),
+                        target_map_fun=tmf,
+                        sigma=cfg["target_map"]["target_map_args"]["sigma"]) 
+        # Create dataloader
+        dataloader = DataLoader(dataset=ds,
+                            batch_size=cfg["training"]["batch_size"],
+                            shuffle=True,
+                            collate_fn=collate_fn)
+    elif split == "val":
+        # Create dataset
+        ds = TrichomeDataset(root=cfg["paths"]["val_data"],  
+                        transform=transforms.Compose(
+                            [transforms.ResizeShortSide(cfg["transforms"]["short_side"]),
+                                transforms.PadToMultipleOf32()]),
+                        target_map_fun=tmf,
+                        sigma=cfg["target_map"]["target_map_args"]["sigma"]) 
+        # Create dataloader
+        dataloader = DataLoader(dataset=ds,
+                            batch_size=cfg["training"]["batch_size"],
+                            shuffle=False,
+                            collate_fn=collate_fn)
+    elif split == "test":
+        # Create dataset
+        ds = TrichomeDataset(root=cfg["paths"]["test_data"],  
+                        transform=transforms.Compose(
+                            [transforms.ResizeShortSide(cfg["transforms"]["short_side"]),
+                                transforms.PadToMultipleOf32()]),
+                        target_map_fun=tmf,
+                        sigma=cfg["target_map"]["target_map_args"]["sigma"]) 
+        # Create dataloader
+        dataloader = DataLoader(dataset=ds,
+                            batch_size=cfg["training"]["batch_size"],
+                            shuffle=False,
+                            collate_fn=collate_fn)
+    else:
+        raise KeyError("split must be one of {'train', 'val', 'test'}.")
 
-        return dataloader
+    return dataloader

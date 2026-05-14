@@ -6,6 +6,7 @@ import os
 import random
 from pathlib import Path
 import json
+import yaml
 import argparse
 from typing import Any
 from collections import OrderedDict
@@ -18,6 +19,7 @@ import matplotlib.pyplot as plt
 import scipy.io as sio
 
 from scripts import models
+from scripts import loss
 
 
 def get_random_data_paths(seed: int = None
@@ -223,9 +225,8 @@ def collate_fn(
     return images, target_maps, coords  # coords = list of tensors
 
 
-def save_model(model: torch.nn.Module,
-               model_name: str,
-               metadata: dict[str, Any],
+def save_model(model_name: str,
+               metadata: dict[str, dict[str, Any]],
                best_cp: OrderedDict[str, torch.Tensor],
                target_dir: str | Path = "models"
                ) -> None:
@@ -234,13 +235,11 @@ def save_model(model: torch.nn.Module,
 
     Parameters
     ----------
-        model : torch.nn.Module
-            A target PyTorch model to save.
         model_name : str
             Model name. If dir for model name already exists, model is saved 
             in existing dir. If not, a new dir is created.
         metadata : dict
-            Dictionary with hyperparameter and results dict.
+            Dictionary with config and results dicts.
         best_cp : OrderedDict
             State dict of model at epoch with lowest validation mae.
         target_dir : str or pathlib.Path, optional
@@ -305,12 +304,6 @@ def save_model(model: torch.nn.Module,
     # Save model overview
     with open(model_overview_path, "w") as f:
         json.dump(model_overview, f, indent=4)
-
-    # Save the model state_dict()
-    model_save_path = model_instance_path / "model.pth"
-    print(f"[INFO] Saving model to '{model_save_path}'.")
-    torch.save(obj=model.state_dict(),
-                f=model_save_path)
     
     # Save metadata (hyperparams and results)
     metadata_save_path = model_instance_path / "metadata.json"
@@ -318,7 +311,7 @@ def save_model(model: torch.nn.Module,
     with open(metadata_save_path, "w") as f:
         json.dump(metadata, f, indent=4)
 
-    # Save best cp
+    # Save best model state dict
     cp_save_path = model_instance_path / "best_cp.pth"
     print(f"[INFO] Saving best cp to '{cp_save_path}'.")
     torch.save(obj=best_cp,
@@ -327,7 +320,6 @@ def save_model(model: torch.nn.Module,
 
 def load_model(model_name: str,
                run_id: int = None,
-               cp: str = "last",
                target_dir: str | Path = "models"
                ) -> torch.nn.Module:
     """
@@ -341,11 +333,6 @@ def load_model(model_name: str,
         Identifier of the training run to load (e.g., 1 -> "training_run_01").
         If None, the function loads the most recent training run.
         Default is None.
-    cp : {"last", "best"}, optional
-        Specifies which checkpoint to load:
-        - "last": Loads the final saved model weights ("model.pth").
-        - "best": Loads the best validation checkpoint ("best_cp.pth").
-        Default is "last".
     target_dir : str or Path, optional
         Root directory where models are stored.
         Default is "models".
@@ -359,8 +346,6 @@ def load_model(model_name: str,
     ------
     FileNotFoundError
         If the specified model directory or training run does not exist.
-    KeyError
-        If `cp` is not one of {"last", "best"}.
     TypeError
         If the model type specified in metadata is not implemented.
     
@@ -370,7 +355,6 @@ def load_model(model_name: str,
         target_dir/
             model_name/
                 training_run_XX/
-                    model.pth
                     best_cp.pth
                     metadata.json
     """
@@ -394,14 +378,6 @@ def load_model(model_name: str,
         if not model_instance_path.exists():
             raise FileNotFoundError(f"No model path found for the given run id, i.e. under path '{model_instance_path}'")
         
-    # Decide if last or best checkpoint should be used
-    if cp == "last":
-        model_path = model_instance_path / "model.pth"
-    elif cp == "best":
-        model_path = model_instance_path / "best_cp.pth"
-    else:
-        raise KeyError(f"Model cp must be one of 'last' or 'best'")
-
     # Load metadata
     json_path = model_instance_path / "metadata.json"
     with open(json_path, "r") as f:
@@ -410,9 +386,10 @@ def load_model(model_name: str,
     # Return model if model type matches an implemented model type
     model_type = metadata["hyperparameters"]["model_type"]
     if model_type == "density_model": 
-        print(f"[INFO] Loaded model from '{model_path}'.")
         model = models.DensityModel(activation=metadata["hyperparameters"]["activation"])
+        model_path = model_instance_path / "best_cp.pth"
         model.load_state_dict(torch.load(model_path))
+        print(f"[INFO] Loaded model from '{model_path}'.")
         return model
     else:
         raise TypeError(f"Model type {model_type} unknown. Update of load_model function required.")
@@ -491,6 +468,35 @@ def init_model(model_name: str,
             return models.DensityModel(activation=activation)
         else:
             raise TypeError(f"Model type {model_type} unknown.")
+
+def init_loss(cfg: dict[str, Any]):
+    """
+    TODO: Add function description.
+    """
+
+    if cfg["loss"]["loss_fun"] == "DensityCountLoss":
+        return loss.DensityCountLoss(lambda_count=cfg["loss"]["loss_args"]["lbda_count"])
+    else:
+        raise KeyError("Loss function unknown. Specify existing loss function in the config.")
+
+def load_config(path: str | Path ="config/config.yaml"
+                ) -> dict[str, Any]:
+    """
+    Load config file with hyperparameters.
+    
+    Parameters
+    ----------
+    path : str or Path, optional
+        Path to config yaml.
+    
+    Returns
+    -------
+    cfg : dict
+        The config file.
+    """
+    with open(path, "r") as f:
+        return yaml.safe_load(f)
+
 
 def parse_train_args() -> argparse.Namespace:
     """

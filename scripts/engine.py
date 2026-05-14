@@ -141,13 +141,11 @@ def validate(model: torch.nn.Module,
     )
 
 def train(model: torch.nn.Module, 
-          model_name: str, 
+          cfg: dict[str, Any], 
           train_dataloader: torch.utils.data.DataLoader, 
           val_dataloader: torch.utils.data.DataLoader, 
-          epochs: int, 
           optimizer: torch.optim.Optimizer, 
           criterion: torch.nn.Module, 
-          hparams: dict[str, Any], 
           device: torch.device
           ) -> None:
     """
@@ -160,20 +158,16 @@ def train(model: torch.nn.Module,
     ----------
     model : torch.nn.Module
         The model to be trained.
-    model_name : str
-        Name used when saving the trained model.
+    cfg : dict
+        Dictionary with the hyperparameters.
     train_dataloader : torch.utils.data.DataLoader
         DataLoader providing the training dataset.
     val_dataloader : torch.utils.data.DataLoader
         DataLoader providing the validation dataset.
-    epochs : int
-        Number of training epochs.
     optimizer : torch.optim.Optimizer
         Optimizer used to update model parameters.
     criterion : callable
         Loss function used to compute training and validation loss.
-    hparams : dict
-        Dictionary used to store the hyperparameters.
     device : torch.device
         Device on which the model and data are processed ("cpu" or "cuda").
     """
@@ -185,9 +179,11 @@ def train(model: torch.nn.Module,
     train_mae_list = []
     val_loss_list = []
     val_mae_list = []
+
+    n_epochs = cfg["training"]["epochs"]
     
     # Run training loop
-    for epoch in tqdm(range(1,epochs+1)):
+    for epoch in tqdm(range(1,n_epochs+1)):
 
         # Train step
         train_loss, train_mae = train_one_epoch(model=model,
@@ -228,13 +224,13 @@ def train(model: torch.nn.Module,
 
     # Write metadata dict
     metadata = {
-        "hyperparameters": hparams,
+        "config": cfg,
         "metrics": metrics
     }
 
 
     # Save model
     utils.save_model(model=model,
-               model_name=model_name,
+               model_name=cfg["model"]["model_name"],
                metadata=metadata,
                best_cp=best_model_cp)

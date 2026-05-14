@@ -1,0 +1,29 @@
+training:
+  batch_size: 32                            # Tran/val/test batch size
+  lr: 1.0e-4                                # Learning rate
+  epochs: 5                                 # Training epochs
+  weight_decay: 1.0e-4                      # Weight decay
+
+loss:
+  loss_fun: "DensityCountLoss"              # Loss function
+  loss_args: 
+    lbda_count: 0.5                         # Count loss weight
+
+target_map:
+  target_map_fun: "generate_density_map"    # Function id to create target map
+  target_map_args: 
+    sigma: 1                                # Target density map standard deviation
+
+model:
+  model_name: "model0"                      # Model name
+  model_type: "density-model"               # Type of model
+  activation: "ReLU"                        # Last layer activation
+  
+transforms:
+  short_side: 512                           # Short side len of transformed image
+  brightness: 0.2                           # Random brightness scale parameter
+
+paths:
+  train_data: "data/preprocessed/train"     # Path to training data
+  val_data: "data/preprocessed/val"         # Path to validation data
+  test_data: "data/preprocessed/test"       # Path to testing data
