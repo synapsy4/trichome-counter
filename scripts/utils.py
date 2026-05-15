@@ -229,7 +229,7 @@ def save_model(last_cp: OrderedDict[str, torch.Tensor],
                optim_cp: OrderedDict[str, torch.Tensor],
                best_cp: OrderedDict[str, torch.Tensor],
                cfg: dict[str, Any], 
-               metircs: dict[str, Any],
+               metrics: dict[str, Any],
                ) -> None:
     """
     Saves a PyTorch model and its metadata.
@@ -267,45 +267,63 @@ def save_model(last_cp: OrderedDict[str, torch.Tensor],
                             exist_ok=True)
     
     # Get model overview path
-    model_overview_path = model_dir_path / "overview.json"
+    overview_path = model_dir_path / "overview.json"
 
     # First training run -> create overview
     if run_idx == 1: 
-        ...
-    """
-        model_overview = metadata.copy()
-        del model_overview["hyperparameters"]["lr"]
-        del model_overview["hyperparameters"]["weight_decay"]
-        del model_overview["hyperparameters"]["batch_size"]
-        del model_overview["hyperparameters"]["short_side_len"]
-    # Not first training run -> write to metadata overview
-    else: 
-        with open(model_overview_path, "r") as f:
-            model_overview = json.load(f)
-        if metadata["metrics"]["best_epoch_val_mae"] < model_overview["metrics"]["best_epoch_val_mae"]: 
-            model_overview["metrics"]["best_epoch_val_mae"] = metadata["metrics"]["best_epoch_val_mae"] 
-            model_overview["metrics"]["best_epoch"] = model_overview["hyperparameters"]["epochs"] + metadata["metrics"]["best_epoch"] 
-        model_overview["hyperparameters"]["epochs"] += metadata["hyperparameters"]["epochs"]
-        model_overview["metrics"]["train_loss_list"].extend(metadata["metrics"]["train_loss_list"])
-        model_overview["metrics"]["train_mae_list"].extend(metadata["metrics"]["train_mae_list"])
-        model_overview["metrics"]["val_loss_list"].extend(metadata["metrics"]["val_loss_list"])
-        model_overview["metrics"]["val_mae_list"].extend(metadata["metrics"]["val_mae_list"])
-        if model_overview["hyperparameters"]["loss_args"] != metadata["hyperparameters"]["loss_args"]:
-            model_overview["hyperparameters"]["loss_args"] = None
-        if model_overview["hyperparameters"]["loss_fun"] != metadata["hyperparameters"]["loss_fun"]:
-            model_overview["hyperparameters"]["loss_fun"] = None
-        if model_overview["hyperparameters"]["target_map_args"] != metadata["hyperparameters"]["target_map_args"]:
-            model_overview["hyperparameters"]["target_map_args"] = None
-        if model_overview["hyperparameters"]["target_map_fun"] != metadata["hyperparameters"]["target_map_fun"]:
-            model_overview["hyperparameters"]["target_map_fun"] = None
-    
-    # Write number of training runs to model overview
-    model_overview["hyperparameters"]["training_runs"] = model_idx
+        # Create overview dict
+        overview = {}
+        # Save main information
+        overview["model_name"] = cfg["model"]["model_name"]
+        overview["epochs"] = cfg["training"]["epochs"]
+        overview["best_epoch"] = metrics["best_epoch"]
+        overview["training_runs"] = 1
+        overview["best_run"] = 1
+        overview["best_val_mae"] = metrics["best_epoch_val_mae"]
+        # Init + fill model history with epoch-wise metrics
+        overview["history"] = []
+        for epoch_idx in range(cfg["training"]["epochs"]):
+            epoch_metrics = {"epoch": epoch_idx+1, 
+                             "train_loss": round(metrics["train_loss_list"][epoch_idx], 3),
+                             "val_loss": round(metrics["val_loss_list"][epoch_idx], 3),
+                             "train_mae": round(metrics["train_mae_list"][epoch_idx], 3),
+                             "val_mae": round(metrics["val_mae_list"][epoch_idx], 3),
+                             "lr": cfg["training"]["lr"],
+                             "wd": cfg["training"]["weight_decay"],
+                             "loss_args": cfg["loss"]["loss_args"],
+                             "target_map_args": cfg["target_map"]["target_map_args"]}
+            overview["history"].append(epoch_metrics)
+    # Not first training run -> write to overview
+    else:
+        # Load overview
+        with open(overview_path, "r") as f:
+            overview = json.load(f)
+        # Increment epoch + run tracks
+        n_prev_epochs = overview["epochs"]
+        overview["epochs"] += cfg["training"]["epochs"]
+        overview["training_runs"] += 1
+        # Update best epoch information
+        if metrics["best_epoch_val_mae"] < overview["best_val_mae"]:
+            overview["best_epoch"] = n_prev_epochs + metrics["best_epoch"] 
+            overview["best_val_mae"] = metrics["best_epoch_val_mae"]
+            overview["best_run"] = run_idx
+        # Extend epoch history
+        for epoch_idx in range(cfg["training"]["epochs"]):
+            epoch_metrics = {"epoch": n_prev_epochs + epoch_idx+1, 
+                             "train_loss": round(metrics["train_loss_list"][epoch_idx], 3),
+                             "val_loss": round(metrics["val_loss_list"][epoch_idx], 3),
+                             "train_mae": round(metrics["train_mae_list"][epoch_idx], 3),
+                             "val_mae": round(metrics["val_mae_list"][epoch_idx], 3),
+                             "lr": cfg["training"]["lr"],
+                             "wd": cfg["training"]["weight_decay"],
+                             "loss_args": cfg["loss"]["loss_args"],
+                             "target_map_args": cfg["target_map"]["target_map_args"]}
+            overview["history"].append(epoch_metrics)
 
     # Save model overview
-    with open(model_overview_path, "w") as f:
-        json.dump(model_overview, f, indent=4)
-    """
+    with open(overview_path, "w") as f:
+        json.dump(overview, f, indent=4)
+
     # Save config
     cfg_save_path = model_instance_path / "config.yaml"
     print(f"[INFO] Saving config to '{cfg_save_path}'.")
