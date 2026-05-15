@@ -225,44 +225,43 @@ def collate_fn(
     return images, target_maps, coords  # coords = list of tensors
 
 
-def save_model(model_name: str,
-               metadata: dict[str, dict[str, Any]],
+def save_model(last_cp: OrderedDict[str, torch.Tensor],
+               optim_cp: OrderedDict[str, torch.Tensor],
                best_cp: OrderedDict[str, torch.Tensor],
-               target_dir: str | Path = "models"
+               cfg: dict[str, Any], 
+               metircs: dict[str, Any],
                ) -> None:
     """
     Saves a PyTorch model and its metadata.
 
     Parameters
     ----------
-        model_name : str
-            Model name. If dir for model name already exists, model is saved 
-            in existing dir. If not, a new dir is created.
-        metadata : dict
-            Dictionary with config and results dicts.
+        last_cp : OrderedDict
+            State dict of model from last epoch.
+        optim_cp : OrderedDict
+            State dict of optimizer from last epoch.
         best_cp : OrderedDict
             State dict of model at epoch with lowest validation mae.
-        target_dir : str or pathlib.Path, optional
-            Root directory where models are stored.
-            Default is "models".
+        cfg : dict
+            Config dict.
+        metircs : dict
+            Dictionary with results.
     """
     # Create target directory
-    target_dir_path = Path(target_dir)
+    target_dir_path = Path(cfg["paths"]["models"])
     target_dir_path.mkdir(parents=True,
                             exist_ok=True)
 
     # Create model save path
-    if model_name.endswith(".pth") or model_name.endswith(".pt"):
-        model_name = model_name.split(".")[0]
+    model_name = cfg["model"]["model_name"]
     model_dir_path = target_dir_path / Path(model_name)
-    model_dir_path.mkdir(parents=True,
-                            exist_ok=True)
+    model_dir_path.mkdir(parents=True, exist_ok=True)
     
     # Create model instance save path
     model_list = os.listdir(model_dir_path)
     idx_list = [int(run[-3:]) for run in model_list if run != "overview.json"] if len(model_list)>0 else [0]
-    model_idx = max(idx_list) + 1
-    model_instance_id = f"training_run_{model_idx:03d}"
+    run_idx = max(idx_list) + 1
+    model_instance_id = f"run_{run_idx:03d}"
     model_instance_path = model_dir_path / Path(model_instance_id)
     model_instance_path.mkdir(parents=True,
                             exist_ok=True)
@@ -270,8 +269,10 @@ def save_model(model_name: str,
     # Get model overview path
     model_overview_path = model_dir_path / "overview.json"
 
-    # First training run -> create metadata overview
-    if model_idx == 1: 
+    # First training run -> create overview
+    if run_idx == 1: 
+        ...
+    """
         model_overview = metadata.copy()
         del model_overview["hyperparameters"]["lr"]
         del model_overview["hyperparameters"]["weight_decay"]
@@ -304,16 +305,28 @@ def save_model(model_name: str,
     # Save model overview
     with open(model_overview_path, "w") as f:
         json.dump(model_overview, f, indent=4)
+    """
+    # Save config
+    cfg_save_path = model_instance_path / "config.yaml"
+    print(f"[INFO] Saving config to '{cfg_save_path}'.")
+    with open(cfg_save_path, "w") as f:
+        yaml.dump(cfg, f)
+
+    # Save last model state dict
+    cp_save_path = model_instance_path / "last_cp.pth"
+    print(f"[INFO] Saving last model cp to '{cp_save_path}'.")
+    torch.save(obj=last_cp,
+                f=cp_save_path)
     
-    # Save metadata (hyperparams and results)
-    metadata_save_path = model_instance_path / "metadata.json"
-    print(f"[INFO] Saving metadata to '{metadata_save_path}'.")
-    with open(metadata_save_path, "w") as f:
-        json.dump(metadata, f, indent=4)
+    # Save optimizer state dict
+    cp_save_path = model_instance_path / "optim_cp.pth"
+    print(f"[INFO] Saving optimizer cp to '{cp_save_path}'.")
+    torch.save(obj=optim_cp,
+                f=cp_save_path)
 
     # Save best model state dict
     cp_save_path = model_instance_path / "best_cp.pth"
-    print(f"[INFO] Saving best cp to '{cp_save_path}'.")
+    print(f"[INFO] Saving best model cp to '{cp_save_path}'.")
     torch.save(obj=best_cp,
                 f=cp_save_path)
     

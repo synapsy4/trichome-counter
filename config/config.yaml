@@ -27,3 +27,4 @@ paths:
   train_data: "data/preprocessed/train"     # Path to training data
   val_data: "data/preprocessed/val"         # Path to validation data
   test_data: "data/preprocessed/test"       # Path to testing data
+  models: "models" 

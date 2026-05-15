@@ -222,15 +222,9 @@ def train(model: torch.nn.Module,
         "val_mae_list": val_mae_list
         }
 
-    # Write metadata dict
-    metadata = {
-        "config": cfg,
-        "metrics": metrics
-    }
-
-
     # Save model
-    utils.save_model(model=model,
-               model_name=cfg["model"]["model_name"],
-               metadata=metadata,
-               best_cp=best_model_cp)
+    utils.save_model(last_cp=model.state_dict(),
+                     optim_cp=optimizer.state_dict(),
+                     best_cp=best_model_cp,
+                     cfg=cfg,
+                     metrics=metrics)
