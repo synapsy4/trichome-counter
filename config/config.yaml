@@ -3,6 +3,7 @@ training:
   lr: 1.0e-4                                # Learning rate
   epochs: 5                                 # Training epochs
   weight_decay: 1.0e-4                      # Weight decay
+  optimizer: "AdamW"                        # Optimizer
 
 loss:
   loss_fun: "DensityCountLoss"              # Loss function

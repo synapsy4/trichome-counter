@@ -509,7 +509,22 @@ def init_model(model_name: str,
 
 def init_loss(cfg: dict[str, Any]):
     """
-    TODO: Add function description.
+    Initialize the loss function specified in the config.
+
+    Parameters
+    ----------
+    cfg : dict[str, Any]
+        Config dict.
+
+    Returns
+    -------
+    torch.nn.Module
+        Loss function.
+
+    Raises
+    ------
+    KeyError
+        If the loss function specified in cfg["loss"]["loss_fun"] is not supported.
     """
 
     if cfg["loss"]["loss_fun"] == "DensityCountLoss":
@@ -523,18 +538,52 @@ def init_optimizer(model_params: Iterator[torch.nn.Parameter],
                    run_id: int = None
                    ) -> torch.optim.Optimizer:
     """
-    TODO: Add function description.
+    Initialize an optimizer and optionally restore its state from a previous training run.
+
+    Initializes the optimizer specified in the config. If continue_training is True,
+    attempts to load the optimizer state from the most recent (or specified) training
+    run to preserve accumulated momentum. The state is discarded and the optimizer
+    is freshly initialized if the optimizer type changed, the learning rate changed
+    by more than a factor of 10, or no saved state is found.
+
+    Parameters
+    ----------
+    model_params : Iterator[torch.nn.Parameter]
+        Parameters of the model to be optimized (i.e. model.parameters()).
+    cfg : dict[str, Any]
+        Config dict.
+    continue_training : bool
+        If True, attempts to resume from a previous run's optimizer state.
+    run_id : int or None, optional
+        Identifier of the training run to load. 
+        If None, loads the most recent training run. Default is None.
+
+    Returns
+    -------
+    torch.optim.Optimizer
+        Initialized optimizer.
+
+    Raises
+    ------
+    KeyError
+        If the optimizer specified in cfg["training"]["optimizer"] is not supported.
+    FileNotFoundError
+        If continue_training is True, run_id is specified, but no corresponding
+        model directory exists.
     """
     # Init optimizer
-    optimizer = torch.optim.AdamW( 
-            model_params,
-            lr=cfg["training"]["lr"],
-            weight_decay=cfg["training"]["weight_decay"]
-        )
+    if cfg["training"]["optimizer"] == "AdamW":
+        optimizer = torch.optim.AdamW( 
+                model_params,
+                lr=cfg["training"]["lr"],
+                weight_decay=cfg["training"]["weight_decay"]
+            )
+    else:
+        raise KeyError("Optimizer unknown. Set in config one of \{AdamW\}.")
     
     # Continue training: Load optimizer state dict
     if continue_training:
-        # Define model path
+        # Define model path (no need to check if existing as continue_training can only be True for existing model path)
         model_dir_path = Path(cfg["paths"]["models"]) / cfg["model"]["model_name"]
         
         # If not otherwise specified load optimizer from last training run
@@ -556,16 +605,24 @@ def init_optimizer(model_params: Iterator[torch.nn.Parameter],
         old_cfg = load_config(path=config_path)
 
         ## Check if we can use existing optimizer
+        optim_path = model_instance_path / "optim_cp.pth"
         use_existing = True
 
         # Strong lr change?
         lr_ratio = old_cfg["training"]["lr"] / cfg["training"]["lr"]
         if lr_ratio > 10 or lr_ratio < 1/10:
             use_existing = False
+        
+        # Optimizer changed?
+        if old_cfg["training"]["optimizer"] != cfg["training"]["optimizer"]:
+            use_existing = False
+
+        # Optimizer not existend (case of old runs, where optim was ot saved)
+        if not optim_path.exists():
+            use_existing = False
 
         if use_existing:
             # Load optimizer
-            optim_path = model_instance_path / "optim_cp.pth"
             optimizer.load_state_dict(torch.load(optim_path, map_location="cpu"))
 
             # Make sure that 'new' lr and weight_decay is used (not from loaded state dict)
