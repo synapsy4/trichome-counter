@@ -5,7 +5,7 @@ import torch
 
 from scripts.data import get_dataloader
 from scripts.engine import train
-from scripts.utils import load_config, init_model, init_loss
+from scripts.utils import load_config, init_model, init_loss, init_optimizer
 
 
 if __name__ == "__main__":
@@ -18,7 +18,7 @@ if __name__ == "__main__":
     val_dataloader = get_dataloader(split="val", cfg=cfg)
    
     # Init model
-    model = init_model(model_name=cfg["model"]["model_name"], 
+    model, continue_training = init_model(model_name=cfg["model"]["model_name"], 
                        model_type=cfg["model"]["model_type"], 
                        activation=cfg["model"]["activation"]) 
 
@@ -26,11 +26,9 @@ if __name__ == "__main__":
     criterion = init_loss(cfg)
 
     # Init optimizer
-    optimizer = torch.optim.AdamW( 
-        model.parameters(),
-        lr=cfg["training"]["lr"],
-        weight_decay=cfg["training"]["weight_decay"]
-    )
+    optimizer = init_optimizer(model_params=model.parameters(),
+                               cfg=cfg,
+                               continue_training=continue_training)
 
     # Get device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

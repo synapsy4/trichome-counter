@@ -10,6 +10,7 @@ import yaml
 import argparse
 from typing import Any
 from collections import OrderedDict
+from collections.abc import Iterator
 
 import numpy as np
 import cv2
@@ -395,7 +396,7 @@ def load_model(model_name: str,
     if not model_dir_path.exists():
         raise FileNotFoundError(f"No model path found matching the given path '{model_dir_path}'")
     
-    # If not otherwise specifiec load model from last training run
+    # If not otherwise specified load model from last training run
     if run_id is None:
         model_list = os.listdir(model_dir_path)
         idx_list = [int(run[-3:]) for run in model_list if run != "overview.json"]
@@ -408,6 +409,7 @@ def load_model(model_name: str,
         model_instance_path = model_dir_path / Path(model_instance_id)
         if not model_instance_path.exists():
             raise FileNotFoundError(f"No model path found for the given run id, i.e. under path '{model_instance_path}'")
+
         
     # Load metadata
     json_path = model_instance_path / "metadata.json"
@@ -460,6 +462,8 @@ def init_model(model_name: str,
     -------
     model : torch.nn.Module
         The loaded or newly initialized model.
+    continue_training : bool
+        Flag indicating if new model is created or existing one loaded.
     
     Raises
     ------
@@ -468,6 +472,8 @@ def init_model(model_name: str,
     TypeError
         If the model type is not implemented.
     """
+    continue_training = False
+
     # Get list of models from the target_dir (default: "models")
     current_dir = os.getcwd()
     if target_dir in os.listdir(current_dir): # Case 1: wd in root dir
@@ -491,12 +497,13 @@ def init_model(model_name: str,
             raise InterruptedError("Exit chosen by user.")
         # Case 2: Continue training chosen => load model
         else:
-            return load_model(model_name, run_id, cp, target_dir)
+            continue_training = True
+            return load_model(model_name, run_id, cp, target_dir), continue_training
     
     # If model not exists yet, init a new one
     else:
         if model_type == "density_model":
-            return models.DensityModel(activation=activation)
+            return models.DensityModel(activation=activation), continue_training
         else:
             raise TypeError(f"Model type {model_type} unknown.")
 
@@ -509,6 +516,65 @@ def init_loss(cfg: dict[str, Any]):
         return loss.DensityCountLoss(lambda_count=cfg["loss"]["loss_args"]["lbda_count"])
     else:
         raise KeyError("Loss function unknown. Specify existing loss function in the config.")
+    
+def init_optimizer(model_params: Iterator[torch.nn.Parameter],
+                   cfg: dict[str, Any],
+                   continue_training: bool,
+                   run_id: int = None
+                   ) -> torch.optim.Optimizer:
+    """
+    TODO: Add function description.
+    """
+    # Init optimizer
+    optimizer = torch.optim.AdamW( 
+            model_params,
+            lr=cfg["training"]["lr"],
+            weight_decay=cfg["training"]["weight_decay"]
+        )
+    
+    # Continue training: Load optimizer state dict
+    if continue_training:
+        # Define model path
+        model_dir_path = Path(cfg["paths"]["models"]) / cfg["model"]["model_name"]
+        
+        # If not otherwise specified load optimizer from last training run
+        if run_id is None:
+            model_list = os.listdir(model_dir_path)
+            idx_list = [int(run[-3:]) for run in model_list if run != "overview.json"]
+            model_idx = max(idx_list)
+            model_instance_id = f"training_run_{model_idx:03d}"
+            model_instance_path = model_dir_path / Path(model_instance_id)
+        # Else load optimizer with given run id
+        else:
+            model_instance_id = f"training_run_{run_id:03d}"
+            model_instance_path = model_dir_path / Path(model_instance_id)
+            if not model_instance_path.exists():
+                raise FileNotFoundError(f"No model path found for the given run id, i.e. under path '{model_instance_path}'")
+        
+        # Load old config
+        config_path = model_instance_path / "config.yaml"
+        old_cfg = load_config(path=config_path)
+
+        ## Check if we can use existing optimizer
+        use_existing = True
+
+        # Strong lr change?
+        lr_ratio = old_cfg["training"]["lr"] / cfg["training"]["lr"]
+        if lr_ratio > 10 or lr_ratio < 1/10:
+            use_existing = False
+
+        if use_existing:
+            # Load optimizer
+            optim_path = model_instance_path / "optim_cp.pth"
+            optimizer.load_state_dict(torch.load(optim_path, map_location="cpu"))
+
+            # Make sure that 'new' lr and weight_decay is used (not from loaded state dict)
+            for param_group in optimizer.param_groups:
+                param_group["lr"] = cfg["training"]["lr"]
+                param_group["weight_decay"] = cfg["training"]["weight_decay"]
+
+    return optimizer
+
 
 def load_config(path: str | Path ="config/config.yaml"
                 ) -> dict[str, Any]:

@@ -20,14 +20,8 @@ if __name__ == "__main__":
     # Setup hyperparameters
     args = parse_test_args()
 
-    SHORT_SIDE = args.short_side
     MODEL_NAME = args.model_name
-    SIGMA = args.sigma
-    LAMBDA_COUNT = args.lbda_count
-    BATCH_SIZE = args.batch_size
     RUN_ID = args.run_id
-    TARGET_MAP_FUN = args.target_map_fun
-
     TARGET_DIR = "models"
 
     # Load config
@@ -37,7 +31,7 @@ if __name__ == "__main__":
     test_dataloader = get_dataloader(split="test", cfg=cfg)
 
     # Init model
-    model = load_model(MODEL_NAME, RUN_ID, TARGET_DIR) 
+    model, _ = load_model(MODEL_NAME, RUN_ID, TARGET_DIR) 
 
     # Init loss
     criterion = init_loss(cfg)
