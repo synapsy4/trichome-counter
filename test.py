@@ -8,7 +8,6 @@ import torch
 import numpy as np
 from matplotlib import pyplot as plt
 
-from scripts.loss import DensityCountLoss
 from scripts.data import get_dataloader
 from scripts.utils import  parse_test_args, load_model, load_config, init_loss
 from scripts.engine import validate
@@ -22,7 +21,9 @@ if __name__ == "__main__":
 
     MODEL_NAME = args.model_name
     RUN_ID = args.run_id
-    TARGET_DIR = "models"
+    CP = args.cp
+    ROOT_DIR = args.model_root_dir
+
 
     # Load config
     cfg = load_config()
@@ -31,7 +32,10 @@ if __name__ == "__main__":
     test_dataloader = get_dataloader(split="test", cfg=cfg)
 
     # Init model
-    model, _ = load_model(MODEL_NAME, RUN_ID, TARGET_DIR) 
+    model = load_model(model_name=MODEL_NAME, 
+                        run_id=RUN_ID, 
+                        cp=CP, 
+                        root_dir=ROOT_DIR) 
 
     # Init loss
     criterion = init_loss(cfg)

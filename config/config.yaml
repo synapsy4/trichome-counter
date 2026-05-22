@@ -1,7 +1,7 @@
 training:
   batch_size: 32                            # Tran/val/test batch size
   lr: 1.0e-4                                # Learning rate
-  epochs: 5                                 # Training epochs
+  epochs: 1                                 # Training epochs
   weight_decay: 1.0e-4                      # Weight decay
   optimizer: "AdamW"                        # Optimizer
 
@@ -13,10 +13,10 @@ loss:
 target_map:
   target_map_fun: "generate_density_map"    # Function id to create target map
   target_map_args: 
-    sigma: 1                                # Target density map standard deviation
+    sigma: 5                                # Target density map standard deviation
 
 model:
-  model_name: "model0"                      # Model name
+  model_name: "model0_density5"             # Model name
   model_type: "density-model"               # Type of model
   activation: "ReLU"                        # Last layer activation
   

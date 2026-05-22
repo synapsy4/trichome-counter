@@ -249,26 +249,26 @@ def save_model(last_cp: OrderedDict[str, torch.Tensor],
             Dictionary with results.
     """
     # Create target directory
-    target_dir_path = Path(cfg["paths"]["models"])
-    target_dir_path.mkdir(parents=True,
+    root_dir = Path(cfg["paths"]["models"])
+    root_dir.mkdir(parents=True,
                             exist_ok=True)
 
-    # Create model save path
+    # Create model save dir
     model_name = cfg["model"]["model_name"]
-    model_dir_path = target_dir_path / Path(model_name)
-    model_dir_path.mkdir(parents=True, exist_ok=True)
+    model_dir= root_dir / Path(model_name)
+    model_dir.mkdir(parents=True, exist_ok=True)
     
     # Create model instance save path
-    model_list = os.listdir(model_dir_path)
+    model_list = os.listdir(model_dir)
     idx_list = [int(run[-3:]) for run in model_list if run != "overview.json"] if len(model_list)>0 else [0]
     run_idx = max(idx_list) + 1
     model_instance_id = f"run_{run_idx:03d}"
-    model_instance_path = model_dir_path / Path(model_instance_id)
-    model_instance_path.mkdir(parents=True,
+    model_instance_dir = model_dir / Path(model_instance_id)
+    model_instance_dir.mkdir(parents=True,
                             exist_ok=True)
     
     # Get model overview path
-    overview_path = model_dir_path / "overview.json"
+    overview_path = model_dir / "overview.json"
 
     # First training run -> create overview
     if run_idx == 1: 
@@ -326,25 +326,25 @@ def save_model(last_cp: OrderedDict[str, torch.Tensor],
         json.dump(overview, f, indent=4)
 
     # Save config
-    cfg_save_path = model_instance_path / "config.yaml"
+    cfg_save_path = model_instance_dir / "config.yaml"
     print(f"[INFO] Saving config to '{cfg_save_path}'.")
     with open(cfg_save_path, "w") as f:
         yaml.dump(cfg, f)
 
     # Save last model state dict
-    cp_save_path = model_instance_path / "last_cp.pth"
+    cp_save_path = model_instance_dir / "last_cp.pth"
     print(f"[INFO] Saving last model cp to '{cp_save_path}'.")
     torch.save(obj=last_cp,
                 f=cp_save_path)
     
     # Save optimizer state dict
-    cp_save_path = model_instance_path / "optim_cp.pth"
+    cp_save_path = model_instance_dir / "optim_cp.pth"
     print(f"[INFO] Saving optimizer cp to '{cp_save_path}'.")
     torch.save(obj=optim_cp,
                 f=cp_save_path)
 
     # Save best model state dict
-    cp_save_path = model_instance_path / "best_cp.pth"
+    cp_save_path = model_instance_dir / "best_cp.pth"
     print(f"[INFO] Saving best model cp to '{cp_save_path}'.")
     torch.save(obj=best_cp,
                 f=cp_save_path)
@@ -352,7 +352,8 @@ def save_model(last_cp: OrderedDict[str, torch.Tensor],
 
 def load_model(model_name: str,
                run_id: int = None,
-               target_dir: str | Path = "models"
+               cp: str = "last",
+               root_dir: str | Path = "models"
                ) -> torch.nn.Module:
     """
     Load a trained model instance and its corresponding checkpoint from disk.
@@ -360,12 +361,16 @@ def load_model(model_name: str,
     Parameters
     ----------
     model_name : str
-        Name of the model directory inside `target_dir`.
+        Name of the model directory inside `root_dir`.
     run_id : int or None, optional
-        Identifier of the training run to load (e.g., 1 -> "training_run_01").
+        Identifier of the training run to load (e.g., 1 -> "run_001").
         If None, the function loads the most recent training run.
         Default is None.
-    target_dir : str or Path, optional
+    cp : str, optional
+        Checkpoint to load: "last" for cp from last epoch, "best" for cp from
+        best epoch. 
+        Default is "last".
+    root_dir : str or Path, optional
         Root directory where models are stored.
         Default is "models".
 
@@ -378,20 +383,23 @@ def load_model(model_name: str,
     ------
     FileNotFoundError
         If the specified model directory or training run does not exist.
+    KeyError
+        If chosen cp does not exist.
     TypeError
         If the model type specified in metadata is not implemented.
     
     Notes
     -----
     - Expects the following directory structure:
-        target_dir/
+        root_dir/
             model_name/
-                training_run_XX/
+                run_XX/
                     best_cp.pth
-                    metadata.json
+                    config.yaml
+                    last_cp.pth
     """
     
-    model_dir_path = Path(target_dir) / model_name
+    model_dir_path = Path(root_dir) / model_name
 
     if not model_dir_path.exists():
         raise FileNotFoundError(f"No model path found matching the given path '{model_dir_path}'")
@@ -401,26 +409,33 @@ def load_model(model_name: str,
         model_list = os.listdir(model_dir_path)
         idx_list = [int(run[-3:]) for run in model_list if run != "overview.json"]
         model_idx = max(idx_list)
-        model_instance_id = f"training_run_{model_idx:03d}"
+        model_instance_id = f"run_{model_idx:03d}"
         model_instance_path = model_dir_path / Path(model_instance_id)
     # Else load model with given run id
     else:
-        model_instance_id = f"training_run_{run_id:03d}"
+        model_instance_id = f"run_{run_id:03d}"
         model_instance_path = model_dir_path / Path(model_instance_id)
         if not model_instance_path.exists():
             raise FileNotFoundError(f"No model path found for the given run id, i.e. under path '{model_instance_path}'")
+        
+    # Get cp file name
+    if cp == "last":
+        cp_file = "last_cp.pth"
+    elif cp == "best":
+        cp_file = "best_cp.pth"
+    else:
+        raise KeyError("CP must be one of \{'last','best'\}")
 
         
-    # Load metadata
-    json_path = model_instance_path / "metadata.json"
-    with open(json_path, "r") as f:
-        metadata = json.load(f)
+    # Load config of model
+    config_path = model_instance_path / "config.yaml"
+    old_cfg = load_config(path=config_path)
 
     # Return model if model type matches an implemented model type
-    model_type = metadata["hyperparameters"]["model_type"]
-    if model_type == "density_model": 
-        model = models.DensityModel(activation=metadata["hyperparameters"]["activation"])
-        model_path = model_instance_path / "best_cp.pth"
+    model_type = old_cfg["model"]["model_type"]
+    if model_type == "density-model": 
+        model = models.DensityModel(activation=old_cfg["model"]["activation"])
+        model_path = model_instance_path / cp_file
         model.load_state_dict(torch.load(model_path))
         print(f"[INFO] Loaded model from '{model_path}'.")
         return model
@@ -432,7 +447,7 @@ def init_model(model_name: str,
                activation: str = "ReLU", 
                run_id: int = None, 
                cp: str = "last", 
-               target_dir: str = "models"
+               root_dir: str = "models"
                ) -> torch.nn.Module:
     """
     Initialize a new model or load an existing model
@@ -455,7 +470,7 @@ def init_model(model_name: str,
     cp : {"last", "best"}, optional
         Specifies which checkpoint to load when initializing an existing model.
         Default is "last".
-    target_dir : str, optional
+    root_dir : str, optional
         Root directory where models are stored. Default is "models".
     
     Returns
@@ -474,13 +489,13 @@ def init_model(model_name: str,
     """
     continue_training = False
 
-    # Get list of models from the target_dir (default: "models")
+    # Get list of models from the root_dir (default: "models")
     current_dir = os.getcwd()
-    if target_dir in os.listdir(current_dir): # Case 1: wd in root dir
-        models_dir = os.path.join(current_dir, target_dir)
+    if root_dir in os.listdir(current_dir): # Case 1: wd in root dir
+        models_dir = os.path.join(current_dir, root_dir)
     else: # Case 2: wd in scripts dir
         parent_dir = os.path.dirname(current_dir)
-        models_dir = os.path.join(parent_dir, target_dir)
+        models_dir = os.path.join(parent_dir, root_dir)
     model_names = os.listdir(models_dir)
 
     # Check if model under name already exists
@@ -498,11 +513,11 @@ def init_model(model_name: str,
         # Case 2: Continue training chosen => load model
         else:
             continue_training = True
-            return load_model(model_name, run_id, cp, target_dir), continue_training
+            return load_model(model_name, run_id, cp, root_dir), continue_training
     
     # If model not exists yet, init a new one
     else:
-        if model_type == "density_model":
+        if model_type == "density-model":
             return models.DensityModel(activation=activation), continue_training
         else:
             raise TypeError(f"Model type {model_type} unknown.")
@@ -591,11 +606,11 @@ def init_optimizer(model_params: Iterator[torch.nn.Parameter],
             model_list = os.listdir(model_dir_path)
             idx_list = [int(run[-3:]) for run in model_list if run != "overview.json"]
             model_idx = max(idx_list)
-            model_instance_id = f"training_run_{model_idx:03d}"
+            model_instance_id = f"run_{model_idx:03d}"
             model_instance_path = model_dir_path / Path(model_instance_id)
         # Else load optimizer with given run id
         else:
-            model_instance_id = f"training_run_{run_id:03d}"
+            model_instance_id = f"run_{run_id:03d}"
             model_instance_path = model_dir_path / Path(model_instance_id)
             if not model_instance_path.exists():
                 raise FileNotFoundError(f"No model path found for the given run id, i.e. under path '{model_instance_path}'")
@@ -652,68 +667,6 @@ def load_config(path: str | Path ="config/config.yaml"
         return yaml.safe_load(f)
 
 
-def parse_train_args() -> argparse.Namespace:
-    """
-    Parse command-line arguments for training a model.
-    
-    Defines and parses hyperparameters for training.
-    
-    Returns
-    -------
-    args : argparse.Namespace
-        Parsed command-line arguments with attributes:
-        - epochs (int): Number of training epochs.
-        - batch_size (int): Batch size for train/val/test.
-        - lr (float): Learning rate.
-        - model_name (str): Name of the saved model file.
-        - model_type (str): Type of model to use.
-        - activation (str): Last layer activation of model.
-        - target_map_fun (str): Function id to create target map.
-        - weight_decay (float): Weight decay for optimizer.
-        - short_side (int): Short side length for image transformation.
-        - sigma (float): Standard deviation for target density maps.
-        - lbda_count (float): Weight for the count loss.
-    """
-    # Creating a parser
-    parser = argparse.ArgumentParser(description="Train model")
-    
-    # Add parser arguments
-    parser.add_argument("--epochs", type=int, default=5,
-                        help="Number of epochs")
-
-    parser.add_argument("--batch-size", type=int, default=32,
-                        help="Batch size for train/val/test")
-
-    parser.add_argument("--lr", type=float, default=1e-4,
-                        help="Learning rate")
-
-    parser.add_argument("--model-name", type=str, default="model0",
-                        help="Saved model filename")
-        
-    parser.add_argument("--model-type", type=str, default="density-model",
-                        help="Type of model")
-    
-    parser.add_argument("--activation", type=str, default="ReLU",
-                        help="Last layer activation")
-
-    parser.add_argument("--target-map-fun", type=str, default="generate_density_map",
-                        help="Function id to create target map")
-    
-    parser.add_argument("--weight-decay", type=float, default=1e-4,
-                        help="Weight decay")
-    
-    parser.add_argument("--short-side", type=int, default=512,
-                        help="Short side len of transformed image")
-    
-    parser.add_argument("--sigma", type=float, default=1,
-                        help="Target density map standard deviation")
-    
-    parser.add_argument("--lbda-count", type=float, default=0.5,
-                        help="Count loss weight")
-    
-    return parser.parse_args()
-
-
 def parse_test_args() -> argparse.Namespace:
     """
     Parse command-line arguments for testing a model.
@@ -725,13 +678,9 @@ def parse_test_args() -> argparse.Namespace:
     args : argparse.Namespace
         Parsed command-line arguments with attributes:
         - model_name (str): Name of the saved model file.
-        - batch_size (int): Batch size for train/val/test.
-        - short_side (int): Short side length for image transformation.
-        - target_map_fun (str): Function id to create target map.
-        - sigma (float): Standard deviation for target density maps.
-        - lbda_count (float): Weight for the count loss.
         - run_id (int): ID of the training run to load model from.
         - cp (str): "last" or "best" model checkpoint to load.
+        - model-root-dir (str): Root directory where model is located.
     """
     # Creating a parser
     parser = argparse.ArgumentParser(description="Test model")
@@ -741,25 +690,13 @@ def parse_test_args() -> argparse.Namespace:
     parser.add_argument("--model-name", type=str, default="model0",
                     help="Saved model filename")
     
-    parser.add_argument("--batch-size", type=int, default=32,
-                        help="Batch size for train/val/test")
-    
-    parser.add_argument("--short-side", type=int, default=512,
-                        help="Short side len of transformed image")
-    
-    parser.add_argument("--sigma", type=float, default=1,
-                        help="Target density map standard deviation")
-    
-    parser.add_argument("--target-map-fun", type=str, default="generate_density_map",
-                    help="Function id to create target map")
-    
-    parser.add_argument("--lbda-count", type=float, default=0.5,
-                        help="Count loss weight")
-    
     parser.add_argument("--run-id", type=int, default=None,
                     help="The training run from which to take the model")
     
     parser.add_argument("--cp", type=str, default="last",
                 help="Test model after 'last' epoch or in 'best' epoch")
+    
+    parser.add_argument("--model-root-dir", type=str, default="models",
+            help="Root directory for model directory.")
     
     return parser.parse_args()

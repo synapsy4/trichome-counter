@@ -183,17 +183,19 @@ def train(model: torch.nn.Module,
     n_epochs = cfg["training"]["epochs"]
     
     # Run training loop
-    for epoch in tqdm(range(1,n_epochs+1)):
+    for epoch in tqdm(range(1,n_epochs+1), desc="Epochs"):
 
         # Train step
+        train_dl = tqdm(train_dataloader, desc=f"Train epoch {epoch}", leave=False)
         train_loss, train_mae = train_one_epoch(model=model,
-                                                dataloader=train_dataloader,
+                                                dataloader=train_dl,
                                                 optimizer=optimizer,
                                                 criterion=criterion,
                                                 device=device)
         # Validation step
+        val_dl = tqdm(val_dataloader, desc=f"Val epoch {epoch}", leave=False)
         val_loss, val_mae, _, _ = validate(model=model,
-                                        dataloader=val_dataloader,
+                                        dataloader=val_dl,
                                         criterion=criterion,
                                         device=device)
         
