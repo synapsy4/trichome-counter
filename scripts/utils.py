@@ -260,68 +260,83 @@ def save_model(last_cp: OrderedDict[str, torch.Tensor],
     
     # Create model instance save path
     model_list = os.listdir(model_dir)
-    idx_list = [int(run[-3:]) for run in model_list if run != "overview.json"] if len(model_list)>0 else [0]
+    idx_list = [int(run[-3:]) for run in model_list if run != "overview.json" and run != "history.jsonl"] if len(model_list)>0 else [0]
     run_idx = max(idx_list) + 1
     model_instance_id = f"run_{run_idx:03d}"
     model_instance_dir = model_dir / Path(model_instance_id)
     model_instance_dir.mkdir(parents=True,
                             exist_ok=True)
     
-    # Get model overview path
-    overview_path = model_dir / "overview.json"
 
-    # First training run -> create overview
-    if run_idx == 1: 
+    # Define overview and epoch log paths
+    overview_path = model_dir / "overview.json"
+    history_path = model_dir / "history.jsonl"
+
+    # First run: Create new overview + history files
+    if run_idx == 1:
         # Create overview dict
-        overview = {}
-        # Save main information
-        overview["model_name"] = cfg["model"]["model_name"]
-        overview["epochs"] = cfg["training"]["epochs"]
-        overview["best_epoch"] = metrics["best_epoch"]
-        overview["training_runs"] = 1
-        overview["best_run"] = 1
-        overview["best_val_mae"] = metrics["best_epoch_val_mae"]
-        # Init + fill model history with epoch-wise metrics
-        overview["history"] = []
-        for epoch_idx in range(cfg["training"]["epochs"]):
-            epoch_metrics = {"epoch": epoch_idx+1, 
-                             "train_loss": round(metrics["train_loss_list"][epoch_idx], 3),
-                             "val_loss": round(metrics["val_loss_list"][epoch_idx], 3),
-                             "train_mae": round(metrics["train_mae_list"][epoch_idx], 3),
-                             "val_mae": round(metrics["val_mae_list"][epoch_idx], 3),
-                             "lr": cfg["training"]["lr"],
-                             "wd": cfg["training"]["weight_decay"],
-                             "loss_args": cfg["loss"]["loss_args"],
-                             "target_map_args": cfg["target_map"]["target_map_args"]}
-            overview["history"].append(epoch_metrics)
-    # Not first training run -> write to overview
+        overview = {
+            "model_name": cfg["model"]["model_name"],
+            "epochs": cfg["training"]["epochs"],
+            "best_epoch": metrics["best_epoch"],
+            "training_runs": 1,
+            "best_run": 1,
+            "best_val_mae": round(metrics["best_epoch_val_mae"], 3),
+        }
+
+        # Create history file
+        with open(history_path, "w") as f:
+            # Write epoch logs
+            for epoch_idx in range(cfg["training"]["epochs"]):
+                epoch_metrics = {
+                    "epoch": epoch_idx + 1,
+                    "train_loss": round(metrics["train_loss_list"][epoch_idx], 3),
+                    "val_loss": round(metrics["val_loss_list"][epoch_idx], 3),
+                    "train_mae": round(metrics["train_mae_list"][epoch_idx], 3),
+                    "val_mae": round(metrics["val_mae_list"][epoch_idx], 3),
+                    "lr": cfg["training"]["lr"],
+                    "wd": cfg["training"]["weight_decay"],
+                    "loss_args": cfg["loss"]["loss_args"],
+                    "target_map_args": cfg["target_map"]["target_map_args"],
+                }
+                f.write(json.dumps(epoch_metrics) + "\n")
+
+    # Not first run: Extend overview + history files
     else:
         # Load overview
         with open(overview_path, "r") as f:
             overview = json.load(f)
-        # Increment epoch + run tracks
+        
+        # Get previous epoch count
         n_prev_epochs = overview["epochs"]
+
+        # Update overview stats
         overview["epochs"] += cfg["training"]["epochs"]
         overview["training_runs"] += 1
-        # Update best epoch information
-        if metrics["best_epoch_val_mae"] < overview["best_val_mae"]:
-            overview["best_epoch"] = n_prev_epochs + metrics["best_epoch"] 
-            overview["best_val_mae"] = metrics["best_epoch_val_mae"]
-            overview["best_run"] = run_idx
-        # Extend epoch history
-        for epoch_idx in range(cfg["training"]["epochs"]):
-            epoch_metrics = {"epoch": n_prev_epochs + epoch_idx+1, 
-                             "train_loss": round(metrics["train_loss_list"][epoch_idx], 3),
-                             "val_loss": round(metrics["val_loss_list"][epoch_idx], 3),
-                             "train_mae": round(metrics["train_mae_list"][epoch_idx], 3),
-                             "val_mae": round(metrics["val_mae_list"][epoch_idx], 3),
-                             "lr": cfg["training"]["lr"],
-                             "wd": cfg["training"]["weight_decay"],
-                             "loss_args": cfg["loss"]["loss_args"],
-                             "target_map_args": cfg["target_map"]["target_map_args"]}
-            overview["history"].append(epoch_metrics)
 
-    # Save model overview
+        # Update best model info
+        if metrics["best_epoch_val_mae"] < overview["best_val_mae"]:
+            overview["best_epoch"] = n_prev_epochs + metrics["best_epoch"]
+            overview["best_val_mae"] = round(metrics["best_epoch_val_mae"], 3)
+            overview["best_run"] = run_idx
+
+        # Append new epoch logs
+        with open(history_path, "a") as f:
+            for epoch_idx in range(cfg["training"]["epochs"]):
+                epoch_metrics = {
+                    "epoch": n_prev_epochs + epoch_idx + 1,
+                    "train_loss": round(metrics["train_loss_list"][epoch_idx], 3),
+                    "val_loss": round(metrics["val_loss_list"][epoch_idx], 3),
+                    "train_mae": round(metrics["train_mae_list"][epoch_idx], 3),
+                    "val_mae": round(metrics["val_mae_list"][epoch_idx], 3),
+                    "lr": cfg["training"]["lr"],
+                    "wd": cfg["training"]["weight_decay"],
+                    "loss_args": cfg["loss"]["loss_args"],
+                    "target_map_args": cfg["target_map"]["target_map_args"],
+                }
+                f.write(json.dumps(epoch_metrics) + "\n")
+
+    # Save overview
     with open(overview_path, "w") as f:
         json.dump(overview, f, indent=4)
 
@@ -368,7 +383,7 @@ def load_model(model_name: str,
         Default is None.
     cp : str, optional
         Checkpoint to load: "last" for cp from last epoch, "best" for cp from
-        best epoch. 
+        best epoch. "best" should only be used for evaluation.
         Default is "last".
     root_dir : str or Path, optional
         Root directory where models are stored.
@@ -407,7 +422,7 @@ def load_model(model_name: str,
     # If not otherwise specified load model from last training run
     if run_id is None:
         model_list = os.listdir(model_dir_path)
-        idx_list = [int(run[-3:]) for run in model_list if run != "overview.json"]
+        idx_list = [int(run[-3:]) for run in model_list if run != "overview.json" and run != "history.jsonl"]
         model_idx = max(idx_list)
         model_instance_id = f"run_{model_idx:03d}"
         model_instance_path = model_dir_path / Path(model_instance_id)
@@ -422,6 +437,7 @@ def load_model(model_name: str,
     if cp == "last":
         cp_file = "last_cp.pth"
     elif cp == "best":
+        print("[WARNING] 'best' cp chosen. Should only be used for evaluation. Otherwise number of training epochs is logged incorrectly + optimizer has later state.")
         cp_file = "best_cp.pth"
     else:
         raise KeyError("CP must be one of \{'last','best'\}")
@@ -604,7 +620,7 @@ def init_optimizer(model_params: Iterator[torch.nn.Parameter],
         # If not otherwise specified load optimizer from last training run
         if run_id is None:
             model_list = os.listdir(model_dir_path)
-            idx_list = [int(run[-3:]) for run in model_list if run != "overview.json"]
+            idx_list = [int(run[-3:]) for run in model_list if run != "overview.json" and run != "history.jsonl"]
             model_idx = max(idx_list)
             model_instance_id = f"run_{model_idx:03d}"
             model_instance_path = model_dir_path / Path(model_instance_id)
@@ -632,13 +648,14 @@ def init_optimizer(model_params: Iterator[torch.nn.Parameter],
         if old_cfg["training"]["optimizer"] != cfg["training"]["optimizer"]:
             use_existing = False
 
-        # Optimizer not existend (case of old runs, where optim was ot saved)
+        # Optimizer not existend (case of old runs, where optim was not saved)
         if not optim_path.exists():
             use_existing = False
 
         if use_existing:
             # Load optimizer
             optimizer.load_state_dict(torch.load(optim_path, map_location="cpu"))
+            print(f"[INFO] Loaded optimizer from '{optim_path}'.")
 
             # Make sure that 'new' lr and weight_decay is used (not from loaded state dict)
             for param_group in optimizer.param_groups:
