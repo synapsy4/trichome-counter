@@ -2,7 +2,6 @@
 Utility functions.
 """
 
-import os
 import random
 from pathlib import Path
 import json
@@ -259,8 +258,8 @@ def save_model(last_cp: OrderedDict[str, torch.Tensor],
     model_dir.mkdir(parents=True, exist_ok=True)
     
     # Create model instance save path
-    model_list = os.listdir(model_dir)
-    idx_list = [int(run[-3:]) for run in model_list if run != "overview.json" and run != "history.jsonl"] if len(model_list)>0 else [0]
+    model_list = [p.name for p in model_dir.iterdir() if p.is_dir()]
+    idx_list = [int(run[-3:]) for run in model_list] if len(model_list)>0 else [0]
     run_idx = max(idx_list) + 1
     model_instance_id = f"run_{run_idx:03d}"
     model_instance_dir = Path(model_dir) / model_instance_id
@@ -377,8 +376,8 @@ def get_model_instance_path(model_dir: str | Path,
     """
     # Load last training run path
     if cp == "last":
-        model_list = os.listdir(model_dir)
-        idx_list = [int(run[-3:]) for run in model_list if run != "overview.json" and run != "history.jsonl"]
+        model_list = [p.name for p in model_dir.iterdir() if p.is_dir()]
+        idx_list = [int(run[-3:]) for run in model_list]
         model_idx = max(idx_list)
         model_instance_id = f"run_{model_idx:03d}"
         model_instance_path = Path(model_dir) / model_instance_id
@@ -511,13 +510,12 @@ def init_model(cfg: dict[str, Any],
     continue_training = False
 
     # Get list of models from the root_dir (default: "models")
-    current_dir = os.getcwd()
-    if root_dir in os.listdir(current_dir): # Case 1: wd in root dir
-        models_dir = os.path.join(current_dir, root_dir)
-    else: # Case 2: wd in scripts dir
-        parent_dir = os.path.dirname(current_dir)
-        models_dir = os.path.join(parent_dir, root_dir)
-    model_names = os.listdir(models_dir)
+    current_dir = Path.cwd()
+    if (current_dir / root_dir).is_dir():   # Case 1: wd in root dir
+        models_dir = current_dir / root_dir
+    else:                                   # Case 2: wd in scripts dir
+        models_dir = current_dir.parent / root_dir
+    model_names = [p.name for p in models_dir.iterdir()]
 
     # Case 1: Continue training
     if cfg["model"]["model_name"] in model_names:
