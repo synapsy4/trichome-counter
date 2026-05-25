@@ -20,7 +20,6 @@ if __name__ == "__main__":
     args = parse_test_args()
 
     MODEL_NAME = args.model_name
-    RUN_ID = args.run_id
     CP = args.cp
     ROOT_DIR = args.model_root_dir
 
@@ -33,7 +32,6 @@ if __name__ == "__main__":
 
     # Init model
     model = load_model(model_name=MODEL_NAME, 
-                        run_id=RUN_ID, 
                         cp=CP, 
                         root_dir=ROOT_DIR) 
 
@@ -65,7 +63,7 @@ if __name__ == "__main__":
     # Save figure
     figure_path = Path("outputs") / MODEL_NAME
     figure_path.mkdir(parents=True, exist_ok=True)
-    figure_path = figure_path / f"run{RUN_ID}_counts_on_testset.png"
+    figure_path = figure_path / f"counts_on_testset.png"
 
     fig.savefig(figure_path, dpi=200)
     plt.show();

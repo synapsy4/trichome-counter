@@ -16,13 +16,12 @@ target_map:
     sigma: 5                                # Target density map standard deviation
 
 model:
-  model_name: "model0_density5"             # Model name
+  model_name: "model1_density5"             # Model name
   model_type: "density-model"               # Type of model
-  activation: "ReLU"                        # Last layer activation
+  activation: "ReLUTanh"                    # Last layer activation
   # Transfer learning (ignored when resuming an existing model_name or pre_model_name = null)
-  pre_model_name: null                      # null = no transfer learning
-  pre_run_id: null                          # null = load from last training run
-  pre_cp: "last"                            # "last" = last checkpoint; "best" = best checkpoint
+  pre_model_name: "model0_density10"        # null = no transfer learning
+  pre_cp: "best"                            # "last" = last checkpoint; "best" = best checkpoint
   
 transforms:
   short_side: 512                           # Short side len of transformed image

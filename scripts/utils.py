@@ -255,7 +255,7 @@ def save_model(last_cp: OrderedDict[str, torch.Tensor],
 
     # Create model save dir
     model_name = cfg["model"]["model_name"]
-    model_dir= root_dir / Path(model_name)
+    model_dir = root_dir / Path(model_name)
     model_dir.mkdir(parents=True, exist_ok=True)
     
     # Create model instance save path
@@ -263,11 +263,13 @@ def save_model(last_cp: OrderedDict[str, torch.Tensor],
     idx_list = [int(run[-3:]) for run in model_list if run != "overview.json" and run != "history.jsonl"] if len(model_list)>0 else [0]
     run_idx = max(idx_list) + 1
     model_instance_id = f"run_{run_idx:03d}"
-    model_instance_dir = model_dir / Path(model_instance_id)
+    model_instance_dir = Path(model_dir) / model_instance_id
     model_instance_dir.mkdir(parents=True,
                             exist_ok=True)
     
-
+    # Flag if new global best model cp is found
+    new_best_model = True
+    
     # Define overview and epoch log paths
     overview_path = model_dir / "overview.json"
     history_path = model_dir / "history.jsonl"
@@ -319,6 +321,8 @@ def save_model(last_cp: OrderedDict[str, torch.Tensor],
             overview["best_epoch"] = n_prev_epochs + metrics["best_epoch"]
             overview["best_val_mae"] = round(metrics["best_epoch_val_mae"], 3)
             overview["best_run"] = run_idx
+        else:
+            new_best_model = False
 
         # Append new epoch logs
         with open(history_path, "a") as f:
@@ -347,47 +351,51 @@ def save_model(last_cp: OrderedDict[str, torch.Tensor],
         yaml.dump(cfg, f)
 
     # Save last model state dict
-    cp_save_path = model_instance_dir / "last_cp.pth"
+    cp_save_path = model_dir / "last_cp.pth"
     print(f"[INFO] Saving last model cp to '{cp_save_path}'.")
     torch.save(obj=last_cp,
                 f=cp_save_path)
     
     # Save optimizer state dict
-    cp_save_path = model_instance_dir / "optim_cp.pth"
+    cp_save_path = model_dir / "optim_cp.pth"
     print(f"[INFO] Saving optimizer cp to '{cp_save_path}'.")
     torch.save(obj=optim_cp,
                 f=cp_save_path)
 
-    # Save best model state dict
-    cp_save_path = model_instance_dir / "best_cp.pth"
-    print(f"[INFO] Saving best model cp to '{cp_save_path}'.")
-    torch.save(obj=best_cp,
-                f=cp_save_path)
+    # Save best model state dict if new best model found
+    if new_best_model:
+        cp_save_path = model_dir / "best_cp.pth"
+        print(f"[INFO] Saving best model cp to '{cp_save_path}'.")
+        torch.save(obj=best_cp,
+                    f=cp_save_path)
     
 def get_model_instance_path(model_dir: str | Path,
-                            run_id: int = None
+                            cp: str = "last"
                             ) -> Path:
     """
     TODO: Add docstring
     """
-    # If not otherwise specified load model from last training run
-    if run_id is None:
+    # Load last training run path
+    if cp == "last":
         model_list = os.listdir(model_dir)
         idx_list = [int(run[-3:]) for run in model_list if run != "overview.json" and run != "history.jsonl"]
         model_idx = max(idx_list)
         model_instance_id = f"run_{model_idx:03d}"
-        model_instance_path = model_dir / Path(model_instance_id)
-    # Else load model with given run id
+        model_instance_path = Path(model_dir) / model_instance_id
+    # Else load path with best cp
+    elif cp == "best":
+        overview_path = Path(model_dir) / "overview.json"
+        with open(overview_path, "r") as f:
+            overview = json.load(f) 
+        best_run_id = overview["best_run"]
+        model_instance_id = f"run_{best_run_id:03d}"
+        model_instance_path = Path(model_dir) / model_instance_id
     else:
-        model_instance_id = f"run_{run_id:03d}"
-        model_instance_path = model_dir / Path(model_instance_id)
-        if not model_instance_path.exists():
-            raise FileNotFoundError(f"No model path found for the given run id, i.e. under path '{model_instance_path}'")
+        raise KeyError("Model cp must be one of \{'last','best'\}")
     return model_instance_path
 
 
 def load_model(model_name: str,
-               run_id: int = None,
                cp: str = "last",
                root_dir: str | Path = "models"
                ) -> torch.nn.Module:
@@ -398,13 +406,9 @@ def load_model(model_name: str,
     ----------
     model_name : str
         Name of the model directory inside `root_dir`.
-    run_id : int or None, optional
-        Identifier of the training run to load (e.g., 1 -> "run_001").
-        If None, the function loads the most recent training run.
-        Default is None.
     cp : str, optional
         Checkpoint to load: "last" for cp from last epoch, "best" for cp from
-        best epoch. "best" should only be used for evaluation.
+        best epoch.
         Default is "last".
     root_dir : str or Path, optional
         Root directory where models are stored.
@@ -430,30 +434,28 @@ def load_model(model_name: str,
         root_dir/
             model_name/
                 run_XX/
-                    best_cp.pth
                     config.yaml
-                    last_cp.pth
+                best_cp.pth
+                last_cp.pth
+                overview.json
     """
     
     model_dir = Path(root_dir) / model_name
 
     if not model_dir.exists():
         raise FileNotFoundError(f"No model path found matching the given path '{model_dir}'")
-    
-    # Get path to specified run (last run if run_id is None)
-    model_instance_path = get_model_instance_path(model_dir, run_id)
-    
+        
     # Get cp file name
     if cp == "last":
         cp_file = "last_cp.pth"
     elif cp == "best":
-        print("[WARNING] 'best' cp chosen. Should only be used for evaluation. Otherwise number of training epochs is logged incorrectly + optimizer has later state.")
+        print("[WARNING] 'best' cp chosen. Should only be used for evaluation or transfer learning. Otherwise number of training epochs is logged incorrectly + optimizer has later state.")
         cp_file = "best_cp.pth"
     else:
         raise KeyError("CP must be one of \{'last','best'\}")
 
-        
     # Load config of model
+    model_instance_path = get_model_instance_path(model_dir, cp)
     config_path = model_instance_path / "config.yaml"
     old_cfg = load_config(path=config_path)
 
@@ -461,7 +463,7 @@ def load_model(model_name: str,
     model_type = old_cfg["model"]["model_type"]
     if model_type == "density-model": 
         model = models.DensityModel(activation=old_cfg["model"]["activation"])
-        model_path = model_instance_path / cp_file
+        model_path = model_dir / cp_file
         model.load_state_dict(torch.load(model_path))
         print(f"[INFO] Loaded model from '{model_path}'.")
         return model
@@ -469,7 +471,6 @@ def load_model(model_name: str,
         raise TypeError(f"Model type {model_type} unknown. Update of load_model function required.")
     
 def init_model(cfg: dict[str, Any],
-               run_id: int = None, 
                cp: str = "last", 
                root_dir: str = "models"
                ) -> tuple[torch.nn.Module, bool]:
@@ -485,9 +486,6 @@ def init_model(cfg: dict[str, Any],
     ----------
     cfg : dict[str, Any]
         Config dict.
-    run_id : int or None, optional
-        Identifier of the training run to load when initializing an existing model.
-        If None, loads the most recent training run. Default is None.
     cp : {"last", "best"}, optional
         Specifies which checkpoint to load when initializing an existing model.
         Default is "last".
@@ -534,17 +532,17 @@ def init_model(cfg: dict[str, Any],
         # Case 2: Continue training chosen => load model
         else:
             continue_training = True
-            return load_model(cfg["model"]["model_name"], run_id, cp, root_dir), continue_training
+            return load_model(cfg["model"]["model_name"], cp, root_dir), continue_training
     
     # Case 2: Init model from another model path (transfer learning)
     elif cfg["model"]["pre_model_name"]:
 
         if cfg["model"]["pre_model_name"] not in model_names:
-            raise KeyError(f"Pretrained model {cfg["model"]["pre_model_name"]} not found in existing models.")
+            raise KeyError(f"Pretrained model {cfg['model']['pre_model_name']} not found in existing models.")
         
         # Get pretrained model path (last or specified run)
         pre_model_dir = Path(models_dir) / cfg["model"]["pre_model_name"]
-        pre_model_instance_path = get_model_instance_path(pre_model_dir, cfg["model"]["pre_run_id"])
+        pre_model_instance_path = get_model_instance_path(pre_model_dir, cfg["model"]["pre_cp"])
         
         # Get pretrained model config to look for conflicts
         pre_model_cfg_path = pre_model_instance_path / "config.yaml"
@@ -561,7 +559,7 @@ def init_model(cfg: dict[str, Any],
             if user_in == "n":
                 raise InterruptedError("Exit chosen by user.")
    
-        return load_model(cfg["model"]["pre_model_name"], cfg["model"]["pre_run_id"], cfg["model"]["pre_cp"], root_dir), continue_training
+        return load_model(cfg["model"]["pre_model_name"], cfg["model"]["pre_cp"], root_dir), continue_training
 
         
     # Case 3: Init new model
@@ -569,7 +567,7 @@ def init_model(cfg: dict[str, Any],
         if cfg["model"]["model_type"] == "density-model":
             return models.DensityModel(activation=cfg["model"]["activation"]), continue_training
         else:
-            raise TypeError(f"Model type {cfg["model"]["model_type"]} unknown.")
+            raise TypeError(f"Model type {cfg['model']['model_type']} unknown.")
 
 def init_loss(cfg: dict[str, Any]):
     """
@@ -599,16 +597,15 @@ def init_loss(cfg: dict[str, Any]):
 def init_optimizer(model_params: Iterator[torch.nn.Parameter],
                    cfg: dict[str, Any],
                    continue_training: bool,
-                   run_id: int = None
                    ) -> torch.optim.Optimizer:
     """
-    Initialize an optimizer and optionally restore its state from a previous training run.
+    Initialize an optimizer and optionally restore its state from the last training run.
 
     Initializes the optimizer specified in the config. If continue_training is True,
-    attempts to load the optimizer state from the most recent (or specified) training
-    run to preserve accumulated momentum. The state is discarded and the optimizer
-    is freshly initialized if the optimizer type changed, the learning rate changed
-    by more than a factor of 10, or no saved state is found.
+    attempts to load the optimizer state from the last training run to preserve 
+    accumulated momentum. The state is discarded and the optimizer is freshly 
+    initialized if the optimizer type changed, the learning rate changed by more than 
+    a factor of 10, or no saved state is found.
 
     Parameters
     ----------
@@ -618,9 +615,6 @@ def init_optimizer(model_params: Iterator[torch.nn.Parameter],
         Config dict.
     continue_training : bool
         If True, attempts to resume from a previous run's optimizer state.
-    run_id : int or None, optional
-        Identifier of the training run to load. 
-        If None, loads the most recent training run. Default is None.
 
     Returns
     -------
@@ -631,9 +625,6 @@ def init_optimizer(model_params: Iterator[torch.nn.Parameter],
     ------
     KeyError
         If the optimizer specified in cfg["training"]["optimizer"] is not supported.
-    FileNotFoundError
-        If continue_training is True, run_id is specified, but no corresponding
-        model directory exists.
     """
     # Init optimizer
     if cfg["training"]["optimizer"] == "AdamW":
@@ -648,28 +639,15 @@ def init_optimizer(model_params: Iterator[torch.nn.Parameter],
     # Continue training: Load optimizer state dict
     if continue_training:
         # Define model path (no need to check if existing as continue_training can only be True for existing model path)
-        model_dir_path = Path(cfg["paths"]["models"]) / cfg["model"]["model_name"]
-        
-        # If not otherwise specified load optimizer from last training run
-        if run_id is None:
-            model_list = os.listdir(model_dir_path)
-            idx_list = [int(run[-3:]) for run in model_list if run != "overview.json" and run != "history.jsonl"]
-            model_idx = max(idx_list)
-            model_instance_id = f"run_{model_idx:03d}"
-            model_instance_path = model_dir_path / Path(model_instance_id)
-        # Else load optimizer with given run id
-        else:
-            model_instance_id = f"run_{run_id:03d}"
-            model_instance_path = model_dir_path / Path(model_instance_id)
-            if not model_instance_path.exists():
-                raise FileNotFoundError(f"No model path found for the given run id, i.e. under path '{model_instance_path}'")
+        model_dir = Path(cfg["paths"]["models"]) / cfg["model"]["model_name"]
         
         # Load old config
+        model_instance_path = get_model_instance_path(model_dir, "last") # Optimizer is always from last cp
         config_path = model_instance_path / "config.yaml"
         old_cfg = load_config(path=config_path)
 
         ## Check if we can use existing optimizer
-        optim_path = model_instance_path / "optim_cp.pth"
+        optim_path = model_dir / "optim_cp.pth"
         use_existing = True
 
         # Strong lr change?
@@ -728,7 +706,6 @@ def parse_test_args() -> argparse.Namespace:
     args : argparse.Namespace
         Parsed command-line arguments with attributes:
         - model_name (str): Name of the saved model file.
-        - run_id (int): ID of the training run to load model from.
         - cp (str): "last" or "best" model checkpoint to load.
         - model-root-dir (str): Root directory where model is located.
     """
@@ -739,9 +716,6 @@ def parse_test_args() -> argparse.Namespace:
 
     parser.add_argument("--model-name", type=str, default="model0",
                     help="Saved model filename")
-    
-    parser.add_argument("--run-id", type=int, default=None,
-                    help="The training run from which to take the model")
     
     parser.add_argument("--cp", type=str, default="last",
                 help="Test model after 'last' epoch or in 'best' epoch")
