@@ -18,12 +18,10 @@ if __name__ == "__main__":
     val_dataloader = get_dataloader(split="val", cfg=cfg)
    
     # Init model
-    model, continue_training = init_model(model_name=cfg["model"]["model_name"], 
-                       model_type=cfg["model"]["model_type"], 
-                       activation=cfg["model"]["activation"]) 
+    model, continue_training = init_model(cfg=cfg) 
 
     # Init loss
-    criterion = init_loss(cfg)
+    criterion = init_loss(cfg=cfg)
 
     # Init optimizer
     optimizer = init_optimizer(model_params=model.parameters(),

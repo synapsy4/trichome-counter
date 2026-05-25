@@ -364,6 +364,27 @@ def save_model(last_cp: OrderedDict[str, torch.Tensor],
     torch.save(obj=best_cp,
                 f=cp_save_path)
     
+def get_model_instance_path(model_dir: str | Path,
+                            run_id: int = None
+                            ) -> Path:
+    """
+    TODO: Add docstring
+    """
+    # If not otherwise specified load model from last training run
+    if run_id is None:
+        model_list = os.listdir(model_dir)
+        idx_list = [int(run[-3:]) for run in model_list if run != "overview.json" and run != "history.jsonl"]
+        model_idx = max(idx_list)
+        model_instance_id = f"run_{model_idx:03d}"
+        model_instance_path = model_dir / Path(model_instance_id)
+    # Else load model with given run id
+    else:
+        model_instance_id = f"run_{run_id:03d}"
+        model_instance_path = model_dir / Path(model_instance_id)
+        if not model_instance_path.exists():
+            raise FileNotFoundError(f"No model path found for the given run id, i.e. under path '{model_instance_path}'")
+    return model_instance_path
+
 
 def load_model(model_name: str,
                run_id: int = None,
@@ -397,7 +418,7 @@ def load_model(model_name: str,
     Raises
     ------
     FileNotFoundError
-        If the specified model directory or training run does not exist.
+        If the specified model directory does not exist.
     KeyError
         If chosen cp does not exist.
     TypeError
@@ -414,25 +435,14 @@ def load_model(model_name: str,
                     last_cp.pth
     """
     
-    model_dir_path = Path(root_dir) / model_name
+    model_dir = Path(root_dir) / model_name
 
-    if not model_dir_path.exists():
-        raise FileNotFoundError(f"No model path found matching the given path '{model_dir_path}'")
+    if not model_dir.exists():
+        raise FileNotFoundError(f"No model path found matching the given path '{model_dir}'")
     
-    # If not otherwise specified load model from last training run
-    if run_id is None:
-        model_list = os.listdir(model_dir_path)
-        idx_list = [int(run[-3:]) for run in model_list if run != "overview.json" and run != "history.jsonl"]
-        model_idx = max(idx_list)
-        model_instance_id = f"run_{model_idx:03d}"
-        model_instance_path = model_dir_path / Path(model_instance_id)
-    # Else load model with given run id
-    else:
-        model_instance_id = f"run_{run_id:03d}"
-        model_instance_path = model_dir_path / Path(model_instance_id)
-        if not model_instance_path.exists():
-            raise FileNotFoundError(f"No model path found for the given run id, i.e. under path '{model_instance_path}'")
-        
+    # Get path to specified run (last run if run_id is None)
+    model_instance_path = get_model_instance_path(model_dir, run_id)
+    
     # Get cp file name
     if cp == "last":
         cp_file = "last_cp.pth"
@@ -458,30 +468,25 @@ def load_model(model_name: str,
     else:
         raise TypeError(f"Model type {model_type} unknown. Update of load_model function required.")
     
-def init_model(model_name: str, 
-               model_type: str, 
-               activation: str = "ReLU", 
+def init_model(cfg: dict[str, Any],
                run_id: int = None, 
                cp: str = "last", 
                root_dir: str = "models"
-               ) -> torch.nn.Module:
+               ) -> tuple[torch.nn.Module, bool]:
     """
     Initialize a new model or load an existing model
     
     Checks if a model with the given name exists in the target directory. 
     If it exists, prompts the user to continue training the existing model or exit.
-    If it does not exist, initializes a new model of the specified type.
+    If it does not exist, initializes a new model of the specified type or loads a
+    pretrained model if specified in cfg.
     
     Parameters
     ----------
-    model_name : str
-        Name of the model to initialize or load.
-    model_type : str
-        Type of model to create if it does not exist.
-    activation : {"ReLU", "ReLUTanh", "Sigmoid"}, optional
-        Last layer activation function of model. Default is "ReLU".
+    cfg : dict[str, Any]
+        Config dict.
     run_id : int or None, optional
-        Identifier of the training run to load. 
+        Identifier of the training run to load when initializing an existing model.
         If None, loads the most recent training run. Default is None.
     cp : {"last", "best"}, optional
         Specifies which checkpoint to load when initializing an existing model.
@@ -499,9 +504,11 @@ def init_model(model_name: str,
     Raises
     ------
     InterruptedError
-        If the user chooses to exit instead of continuing training an existing model.
+        If the user chooses to exit.
     TypeError
-        If the model type is not implemented.
+        If the model type is not implemented or the pretrained type differs.
+    KeyError
+        If pretrained model does not exist.
     """
     continue_training = False
 
@@ -514,12 +521,10 @@ def init_model(model_name: str,
         models_dir = os.path.join(parent_dir, root_dir)
     model_names = os.listdir(models_dir)
 
-    # Check if model under name already exists
-    if model_name in model_names:
+    # Case 1: Continue training
+    if cfg["model"]["model_name"] in model_names:
         # If model exists: Ask user to continue training or exit
-        user_in = input("Model with model name alrady exists.\nContinue training (y) existing model or exit (n)?\n [y/n]:")
-        
-        # Wait for valid user answer
+        user_in = input("Model with model name already exists.\nContinue training (y) existing model or exit (n)?\n [y/n]:")
         while user_in not in ["y","n"]:
             user_in = input("Valid input: {y,n} ({Continue training, exit})\n")
         
@@ -529,14 +534,42 @@ def init_model(model_name: str,
         # Case 2: Continue training chosen => load model
         else:
             continue_training = True
-            return load_model(model_name, run_id, cp, root_dir), continue_training
+            return load_model(cfg["model"]["model_name"], run_id, cp, root_dir), continue_training
     
-    # If model not exists yet, init a new one
+    # Case 2: Init model from another model path (transfer learning)
+    elif cfg["model"]["pre_model_name"]:
+
+        if cfg["model"]["pre_model_name"] not in model_names:
+            raise KeyError(f"Pretrained model {cfg["model"]["pre_model_name"]} not found in existing models.")
+        
+        # Get pretrained model path (last or specified run)
+        pre_model_dir = Path(models_dir) / cfg["model"]["pre_model_name"]
+        pre_model_instance_path = get_model_instance_path(pre_model_dir, cfg["model"]["pre_run_id"])
+        
+        # Get pretrained model config to look for conflicts
+        pre_model_cfg_path = pre_model_instance_path / "config.yaml"
+        pre_model_cfg = load_config(pre_model_cfg_path)
+
+        # Conflict case 1: Model type mismatch
+        if pre_model_cfg["model"]["model_type"] != cfg["model"]["model_type"]:
+            raise TypeError("Model type of pretrained model must be equal to model type of new model.")
+        # Conflict case 2: Activation function mismatch
+        if pre_model_cfg["model"]["activation"] != cfg["model"]["activation"]:
+            user_in = input("Pretrained model last layer activation differs from chosen activation.\nStill proceed (y) or exit (n)?\n [y/n]")
+            while user_in not in ["y","n"]:
+                user_in = input("Valid input: {y,n} ({Proceed, exit})\n")
+            if user_in == "n":
+                raise InterruptedError("Exit chosen by user.")
+   
+        return load_model(cfg["model"]["pre_model_name"], cfg["model"]["pre_run_id"], cfg["model"]["pre_cp"], root_dir), continue_training
+
+        
+    # Case 3: Init new model
     else:
-        if model_type == "density-model":
-            return models.DensityModel(activation=activation), continue_training
+        if cfg["model"]["model_type"] == "density-model":
+            return models.DensityModel(activation=cfg["model"]["activation"]), continue_training
         else:
-            raise TypeError(f"Model type {model_type} unknown.")
+            raise TypeError(f"Model type {cfg["model"]["model_type"]} unknown.")
 
 def init_loss(cfg: dict[str, Any]):
     """
