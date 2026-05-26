@@ -482,3 +482,48 @@ class PadToMultipleOf32:
         )
 
         return image, coords
+    
+class Normalize:
+    """
+    Normalize image tensor with mean and standard deviation.
+
+    Parameters
+    ----------
+    mean : list of float
+        Per-channel mean values (e.g. [0.485, 0.456, 0.406] for ImageNet).
+    std : list of float
+        Per-channel standard deviation values (e.g. [0.229, 0.224, 0.225] for ImageNet).
+
+    Methods
+    -------
+    __call__(image, coords)
+        Normalize image and pass coordinates through unchanged.
+    """
+    def __init__(self, mean: list[float], std: list[float]) -> None:
+        self.mean = torch.tensor(mean).view(3, 1, 1)
+        self.std = torch.tensor(std).view(3, 1, 1)
+
+    def __call__(self,
+                 image: torch.Tensor,
+                 coords: torch.Tensor
+                 ) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Normalize image and pass coordinates through unchanged.
+
+        Parameters
+        ----------
+        image : torch.Tensor
+            Input image of shape (C, H, W), expected to be in [0, 1].
+        coords : torch.Tensor
+            Nx2 tensor of point coordinates, passed through unchanged.
+
+        Returns
+        -------
+        image : torch.Tensor
+            Normalized image.
+        coords : torch.Tensor
+            Unchanged point coordinates.
+        """
+        image = (image - self.mean) / self.std
+
+        return image, coords

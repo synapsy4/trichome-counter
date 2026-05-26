@@ -12,9 +12,7 @@ import matplotlib.pyplot as plt
 def generate_density_map(coords: torch.Tensor, 
                          H: int, 
                          W: int, 
-                         sigma: float, 
-                         *target_map_args: Any, 
-                         **target_map_kwargs: Any
+                         sigma: float
                          ) -> torch.Tensor:
     """
     Generate a 2D Gaussian density map from point coordinates.
@@ -91,9 +89,7 @@ def generate_density_map_adaptive(coords: torch.Tensor,
                                   k: int = 3, 
                                   beta: float = 0.4, 
                                   sigma_min: float = 2.0, 
-                                  sigma_max: float = 12.0, 
-                                  *target_map_args: Any, 
-                                  **target_map_kwargs: Any
+                                  sigma_max: float = 12.0
                                   ) -> torch.Tensor:
     """
     Generate adaptive Gaussian density map using kNN-based sigma.
@@ -146,7 +142,7 @@ def generate_density_map_adaptive(coords: torch.Tensor,
         sigma = sigmas[idx]
 
         # Define local window
-        radius = int(3 * sigma)
+        radius = int(3 * sigma.item())
         x0 = max(0, int(x) - radius)
         x1 = min(W, int(x) + radius + 1)
         y0 = max(0, int(y) - radius)

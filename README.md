@@ -78,6 +78,7 @@ TrichomeCounter/
 │   ├── data_transformations.py
 │   ├── data.py
 │   ├── engine.py
+│   ├── evaluations.py
 │   ├── loss.py
 │   ├── models.py
 │   ├── target_maps.py
