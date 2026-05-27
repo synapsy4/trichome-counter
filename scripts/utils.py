@@ -152,44 +152,6 @@ def load_preprocessed_image_data(image_path_pre: str | Path,
     return img_pre, coords_pre
 
 
-def plot_data_instance(img: np.ndarray | torch.Tensor, 
-                       coords: np.ndarray | torch.Tensor, 
-                       title: str = "", 
-                       ax: matplotlib.axes.Axes = None
-                       ) -> None:
-    """
-    Plot an image with overlaid coordinate points.
-    
-    Parameters
-    ----------
-    img : numpy.ndarray or torch.Tensor
-        Image to display with shape (H, W, 3) in RGB format.
-    coords : numpy.ndarray or torch.Tensor
-        Array of (x, y)-coordinates with shape (N, 2). Can be empty.
-    title : str, optional
-        Title to display above the plot. Default is empty string.
-    ax : matplotlib.axes.Axes, optional
-        Matplotlib axes object to plot on. If None, creates a new figure with
-        size (10, 5). Default is None.
-    
-    Returns
-    -------
-    None
-        Displays the plot on the provided or created axes.
-    """
-    # If no axes provided, create one
-    if ax is None:
-        _, ax = plt.subplots(figsize=(10,5))
-    # Plot image
-    ax.imshow(img)
-    # Plot coordinates if given
-    if len(coords) > 0:
-        ax.scatter(coords[:,0], coords[:,1], s=10, c="red", marker="o")
-    # Set title and turn off axis
-    ax.set_title(title)
-    ax.axis("off")
-
-
 def collate_fn(
         batch: list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]
         ) -> tuple[torch.Tensor, torch.Tensor, list[torch.Tensor]]:

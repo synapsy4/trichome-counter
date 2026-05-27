@@ -85,7 +85,7 @@ def validate(model: torch.nn.Module,
     criterion : callable
         Loss function.
     device : torch.device
-        Device to run computations on (e.g., "cuda" or "cpu").
+        Device on which the model and data are processed ("cpu" or "cuda").
     
     Returns
     -------
@@ -120,7 +120,7 @@ def validate(model: torch.nn.Module,
             # Compute loss
             loss, _, _ = criterion(pred_density, gt_density)
 
-            total_loss+= loss.item()
+            total_loss += loss.item()
 
             # Monitor count-level MAE
             pred_count = pred_density.sum(dim=[1, 2, 3])

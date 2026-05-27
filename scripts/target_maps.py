@@ -168,39 +168,3 @@ def generate_density_map_adaptive(coords: torch.Tensor,
         density[y0:y1, x0:x1] += g
 
     return density
-
-
-def plot_density_map(img: torch.Tensor, 
-                     density: torch.Tensor, 
-                     alpha: float = 0.5, 
-                     title: str = "", 
-                     ax: matplotlib.axes.Axes = None
-                     ) -> None:
-    """
-    Visualize a density map overlaid on an image.
-
-    Parameters
-    ----------
-    img : torch.Tensor
-        RGB image to display as background.
-    density : torch.Tensor
-        2D density map to overlay using jet colormap.
-    alpha : float, optional
-        Transparency level for density overlay (default: 0.5).
-    title : str, optional
-        Plot title.
-    ax : matplotlib.axes.Axes, optional
-        Matplotlib axes object to plot on. If None, creates a new figure with
-        size (10, 5). Default is None.
-    """
-    # If no axes provided, create one
-    if ax is None:
-        _, ax = plt.subplots(figsize=(10,5))
-    # Plot image
-    ax.imshow(img)
-    # Overlay density map with transparency
-    ax.imshow(density, cmap="jet", alpha=alpha)
-    #plt.colorbar(label="Density")
-    # Set title and turn off axis
-    ax.set_title(title)
-    ax.axis("off")

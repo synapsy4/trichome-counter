@@ -82,7 +82,8 @@ TrichomeCounter/
 │   ├── loss.py
 │   ├── models.py
 │   ├── target_maps.py
-│   └── utils.py
+│   ├── utils.py
+│   └── visualizations.py
 │
 ├── exploration.ipynb       # Data exploration and experiments
 ├── requirements.txt

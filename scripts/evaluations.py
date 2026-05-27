@@ -2,36 +2,119 @@
 Evaluation functions
 """
 
-from pathlib import Path
-from collections import Any
-
+import torch
 import numpy as np
 from matplotlib import pyplot as plt
 
-def visualize_test_summary(avg_loss: float,
-                           avg_mae: float,
-                           gt_counts: list,
-                           pred_counts: list,
-                           cfg: dict[str, Any],
-                           cp: str
-                           ) -> None:
+
+def predict_single_image(model: torch.nn.Module,
+                         img: torch.Tensor,
+                         device: torch.device
+                         ) -> tuple[np.ndarray, int]:
     """
-    TODO: Add docsting
+    Run inference on a single image tensor and return the predicted densitymap
+    and trichome counts derived via densitymap summation.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Trained model.
+    img : torch.Tensor
+        RGB image tensor of shape [3, H, W], normalized to [0, 1].
+    device : torch.device
+        Device on which the model and data are processed ("cpu" or "cuda").
+
+    Returns
+    -------
+    pred_density : np.ndarray
+        Raw predicted density.
+    pred_count : int
+        Predicted trichome count.
+    """
+    
+    model.eval()
+    
+    # Make sure img + model are on the same device
+    model.to(device), img.to(device)
+
+    # Make inference + directly convert to numpy
+    with torch.inference_mode():
+        pred_density = model(img.unsqueeze(0)).squeeze().cpu().numpy()
+
+    pred_count = round(pred_density.sum())
+
+    return pred_density, pred_count
+    
+
+def evaluate_on_testset(model: torch.nn.Module,
+                        dataloader: torch.utils.data.DataLoader,
+                        device: torch.device
+                        ) -> dict:
+    """
+    Run inference over a full test DataLoader and compute quantitative
+    counting metrics.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Trained model.
+    dataloader : torch.utils.data.DataLoader
+        DataLoader whose dataset returns: (img, target_map, coords)
+    device : torch.device
+        Device to run inference on.
+
+    Returns
+    -------
+    dict with keys:
+        "gt_counts" : np.ndarray [N]
+            Ground-truth counts per sample.
+        "pred_counts_sum" : np.ndarray [N]
+            Sum-based predicted counts.
+        "mae_sum" : float
+            MAE using densitymap summation.
+        "rmse_sum" : float
+            RMSE using densitymap summation.
+        "me_sum" : float
+            Mean signed error (bias) for densitymap summation.
     """
 
-    fig, ax = plt.subplots(3,1, figsize=(10,19))
-    fig.suptitle(f"Avg. Loss = {avg_loss:.2f} | Avg. MAE = {avg_mae:.2f}")
-    ax[0].bar(x=range(len(gt_counts)), height=gt_counts)
-    ax[0].set_title("GT counts")
-    ax[1].bar(x=range(len(pred_counts)), height=pred_counts)
-    ax[1].set_title("Pred counts")
-    ax[2].bar(x=range(len(gt_counts)), height=np.array(pred_counts)-np.array(gt_counts))
-    ax[2].set_title("Pred counts - GT counts")
+    model.eval()
+    model.to(device)
 
-    # Save figure
-    figure_path = Path(cfg["paths"]["outputs"]) / cfg["model"]["model_name"]
-    figure_path.mkdir(parents=True, exist_ok=True)
-    figure_path = figure_path / f"{cp}_cp_counts_on_testset.png"
+    gt_counts = []
+    pred_counts = []
 
-    fig.savefig(figure_path, dpi=200)
-    print(f"[INFO] Test summary saved to '{figure_path}'")
+    # Make inference on test set
+    with torch.inference_mode():
+        for images, _, coords in dataloader:
+            
+            images = images.to(device)       
+            pred_densities = model(images) 
+
+            for i in range(images.size(0)):
+
+                # GT counts
+                coords_i = coords[i]
+                gt_counts.append(len(coords_i))
+
+                # Pred counts
+                pred_density = pred_densities[i].squeeze().cpu().numpy()
+                pred_counts.append(round(pred_density.sum()))
+        
+    # Convert counts to numpy
+    gt = np.array(gt_counts, dtype=np.float32)
+    pred = np.array(pred_counts, dtype=np.float32)
+
+
+    # Make results dict
+    results = {
+        # Per-sample arrays
+        "gt_counts": gt,
+        "pred_counts": pred,
+        # Aggregate metrics
+        "mae_sum": float(np.mean(np.abs(pred - gt))),
+        "rmse_sum": float(np.sqrt(np.mean((pred - gt) ** 2))),
+        "me_sum": float(np.mean(pred - gt)),
+    }
+
+    return results
