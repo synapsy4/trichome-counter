@@ -7,9 +7,9 @@ from pathlib import Path
 import torch
 
 from scripts.data import get_dataloader
-from scripts.utils import  parse_test_args, load_model, load_config, init_loss, get_model_instance_path
-from scripts.engine import validate
-from scripts.evaluations import visualize_test_summary
+from scripts.utils import  parse_test_args, load_model, load_config, get_model_instance_path
+from scripts.evaluations import evaluate_on_testset
+from scripts.visualizations import plot_error_distribution, visualize_test_samples, visualize_test_sample_trichomes
 
 
 
@@ -37,23 +37,36 @@ if __name__ == "__main__":
                         cp=CP, 
                         root_dir=ROOT_DIR) 
 
-    # Init loss
-    criterion = init_loss(cfg)
-
     # Get device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Test model
-    test_results = validate(model=model.to(device),
-        dataloader=test_dataloader, 
-        criterion=criterion, 
-        device=device)
+    test_results = evaluate_on_testset(model=model, 
+                                       dataloader=test_dataloader, 
+                                       device=device)
 
     # Visualize test results
-    visualize_test_summary(avg_loss=test_results[0],
-                           avg_mae=test_results[1],
-                           gt_counts=test_results[2],
-                           pred_counts=test_results[3],
-                           cfg=cfg,
-                           cp=CP)
+    plot_error_distribution(eval_results=test_results,
+                            cfg=cfg,
+                            cp=CP,
+                            save_fig=True)
+    
+    # Visualize random samples
+    visualize_test_samples(model=model, 
+                           dataset=test_dataloader.dataset, 
+                           device=device, 
+                           cfg=cfg, 
+                           cp=CP, 
+                           n_samples=5,
+                           save_fig=True)
+    
+    # Visualize random samples zoomed in on trichome region
+    visualize_test_sample_trichomes(model=model, 
+                                    dataset=test_dataloader.dataset, 
+                                    device=device, 
+                                    cfg=cfg, 
+                                    cp=CP, 
+                                    n_samples=5,
+                                    save_fig=True)
+
 

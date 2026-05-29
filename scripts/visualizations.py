@@ -52,8 +52,8 @@ def plot_image(img: torch.Tensor | np.ndarray,
 
     # Plot coordinates
     if coords is not None and len(coords) > 0:
-        ax.scatter(coords[:,0], coords[:,1], s=20, c="red", marker="o")
-
+        ax.scatter(coords[:,0], coords[:,1], s=20, c="red", marker="o")  
+  
     # Set title and turn off axis
     ax.set_title(title)
     ax.axis("off")
@@ -63,7 +63,7 @@ def plot_density_map(density: torch.Tensor,
                      img: torch.Tensor | np.ndarray = None,
                      alpha: float = 0.5, 
                      title: str = "",
-                    cmap: str = "jet", 
+                     cmap: str = "jet", 
                      ax: plt.Axes = None
                      ) -> None:
     """
@@ -211,7 +211,7 @@ def visualize_test_samples(model: torch.nn.Module,
                          cmap=cmap_raw,
                          ax=ax)
 
-    fig.suptitle("Trichome detection — test samples", fontsize=12,y=1.01)
+    fig.suptitle("Trichome detection — test samples", fontsize=16)
     fig.tight_layout()
 
     # Save figure to model outputs if specified
@@ -219,6 +219,148 @@ def visualize_test_samples(model: torch.nn.Module,
         save_path = Path(cfg["paths"]["outputs"]) / cfg["model"]["model_name"]
         save_path.mkdir(parents=True, exist_ok=True)
         save_path = save_path / f"rnd_predictions_cp_{cp}.png"
+        fig.savefig(
+            save_path,
+            dpi=150,
+            bbox_inches="tight")
+        print(f"[INFO] Figure saved to '{save_path}'")
+
+
+def visualize_test_sample_trichomes(model: torch.nn.Module,
+                                    dataset: torch.utils.data.Dataset,
+                                    device: torch.device,
+                                    cfg: dict[str, Any],
+                                    cp: str,
+                                    n_samples: int = 4,
+                                    cutout_size: int = 100,
+                                    alpha_over: float = 0.5,
+                                    alpha_raw: float = 1.0,
+                                    cmap_over: str = "hot",
+                                    cmap_raw: str = "hot",
+                                    save_fig: bool = False
+                                    ) -> None:
+    """
+    Randomly sample images that have at least 1 trichome from a dataset, zoom in on a random trichome 
+    and visualise model predictions in a three-panel-per-row grid:
+        (A) Original + GT coords at zoom region
+        (B) Densitymap overlay      
+        (C) Raw density map
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Trained model.
+    dataset : torch.utils.data.Dataset
+        Dataset with (img, target_map, coords) entries.
+    device : torch.device
+        Device to run inference on.
+    cfg : dict
+        Config dict.
+    cp : str
+        The model checkpoint id {"best" or "last"}.
+    n_samples : int, optional
+        Number of random samples to visualise. Default is 4.
+    cutout_size : int, optional
+        The sidelength in px of the cutout region around a trichome.
+        Default is 100.
+    alpha_over : float, optional
+        Densitymap overlay opacity for panel B.
+    alpha_raw : float, optional
+        Densitymap overlay opacity for panel C.
+    cmap_over : str, optional
+        Matplotlib colormap name for the panel B.
+    cmap_raw : str, optional
+        Matplotlib colormap name for the panel C.
+    save_fig : bool, optional
+        If true, the figure is saved.
+    """
+
+    # Get random sample indices
+    n_samples_all = len(dataset)
+    indices = []
+    tolerance = 20
+    fails = 0
+    while len(indices) < n_samples and fails < tolerance:
+        idx = np.random.randint(0, n_samples_all)
+        _, _, coords = dataset[idx]
+        if idx in indices or len(coords) == 0:
+            fails += 1
+        else:
+            fails = 0
+            indices.append(idx)
+ 
+    fig, axes = plt.subplots(
+        nrows=len(indices),
+        ncols=3,
+        figsize=(14, 4 * len(indices))
+    )
+
+    # Ensure axes is always 2D
+    if len(indices) == 1:
+        axes = axes[np.newaxis, :]
+
+    for row, idx in enumerate(indices):
+
+        # Get sample
+        img, _, coords = dataset[idx]
+        gt_count = len(coords)
+
+        # Get predictions
+        pred_density, pred_count = predict_single_image(
+            model=model,
+            img=img,
+            device=device
+            )
+        
+        # Cutout region around a random trichome
+        coord_idx = np.random.choice(len(coords))
+        x, y = coords[coord_idx]
+        _, H, W = img.shape
+        lower_x = int(max(0, min(x - cutout_size // 2, W - cutout_size)))
+        lower_y = int(max(0, min(y - cutout_size // 2, H - cutout_size)))
+        cutout_img = img[:, lower_y:lower_y+cutout_size, lower_x:lower_x+cutout_size]
+        cutout_pred_density = pred_density[lower_y:lower_y+cutout_size, lower_x:lower_x+cutout_size]
+        
+        # Panel A: original image + GT coord
+        ax = axes[row, 0]
+        
+        # Select all coords within the cutout region and shift to local coordinates
+        mask = (
+            (coords[:, 0] >= lower_x) & (coords[:, 0] < lower_x + cutout_size) &
+            (coords[:, 1] >= lower_y) & (coords[:, 1] < lower_y + cutout_size)
+        )
+        local_coords = coords[mask] - np.array([lower_x, lower_y])
+        plot_image(img=cutout_img,
+                   coords=local_coords,
+                   title=f"Sample {idx}  |  GT count: {gt_count}",
+                   ax=ax)
+
+        # Panel B: Densitymap overlay
+        ax = axes[row, 1]
+
+        plot_density_map(density=cutout_pred_density,
+                         img=cutout_img,
+                         alpha=alpha_over,
+                         title=f"Predicted density | Pred count={pred_count}",
+                         cmap=cmap_over,
+                         ax=ax)
+
+        # Panel C: Blank density map
+        ax = axes[row, 2]
+        plot_density_map(density=cutout_pred_density,
+                         alpha=alpha_raw,
+                         title="Raw predicted density",
+                         cmap=cmap_raw,
+                         ax=ax)
+
+    fig.suptitle("Trichome detection — test samples — zoomed on trichomes", fontsize=16, y=1.01)
+    fig.tight_layout()
+
+    # Save figure to model outputs if specified
+    if save_fig:
+        save_path = Path(cfg["paths"]["outputs"]) / cfg["model"]["model_name"]
+        save_path.mkdir(parents=True, exist_ok=True)
+        save_path = save_path / f"rnd_trichome_predictions_cp_{cp}.png"
         fig.savefig(
             save_path,
             dpi=150,
@@ -310,7 +452,7 @@ def plot_error_distribution(eval_results: dict,
     ax.set_xlabel("Signed error  (pred − GT)", fontsize=9)
     ax.set_ylabel("Density", fontsize=9)
     ax.set_title("Error distribution", fontsize=10)
-    ax.legend(fontsize=8, loc="lower right")
+    ax.legend(fontsize=8, loc="upper right")
     ax.spines[["top", "right"]].set_visible(False)
     ax.tick_params(labelsize=8)
  
