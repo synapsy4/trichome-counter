@@ -13,10 +13,11 @@ loss:
 target_map:
   target_map_fun: "generate_density_map"    # Function id to create target map
   target_map_args: 
-    sigma: 10                                # Target density map standard deviation
+    sigma: 10                               # Target density map standard deviation
+  use_blend_maps: true                      # If true, pregenerated target maps are used
 
 model:
-  model_name: "model0_density10norm"             # Model name
+  model_name: "model1_density10norm"             # Model name
   model_type: "density-model"               # Type of model
   activation: "ReLUTanh"                    # Last layer activation
   # Transfer learning (ignored when resuming an existing model_name or pre_model_name = null)

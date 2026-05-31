@@ -33,6 +33,8 @@ class TrichomeDataset(Dataset):
         target_map_fun(coords, H, W, *args, **kwargs) and return a tensor.
     transform : callable, optional
         Transform to apply to images and coordinates (default: None).
+    use_blend_maps: bool, optional
+        If true, pregenerated target maps are used.
     *target_map_args
         Positional arguments to pass to target_map_fun (e.g., sigma for Gaussian
         density maps).
@@ -54,7 +56,8 @@ class TrichomeDataset(Dataset):
     def __init__(self, 
                  root: str | Path, 
                  target_map_fun: Callable, 
-                 transform: Callable = None, 
+                 transform: Callable = None,
+                 use_blend_maps: bool = False, 
                  *target_map_args: Any, 
                  **target_map_kwargs: Any
                  ) -> None:
@@ -63,6 +66,7 @@ class TrichomeDataset(Dataset):
         self.target_map_fun = target_map_fun
         self.target_map_args = target_map_args
         self.target_map_kwargs = target_map_kwargs
+        self.use_blend_maps = use_blend_maps
         self.images = sorted((self.root / "images").glob("*.jpg"))
 
     def __len__(self) -> int:
@@ -107,15 +111,28 @@ class TrichomeDataset(Dataset):
         img = torch.from_numpy(img).permute(2, 0, 1).float() / 255.0
         coords = torch.from_numpy(coords).float()
 
-        # Apply transforms if provided
-        if self.transform:
-            img, coords = self.transform(img, coords)
+        # Blend map logic
+        if self.use_blend_maps:
+            blend_path = self.root / "blend_maps" / f"{img_path.stem}.npz"
+            if blend_path.exists():
+               target_map = torch.from_numpy(np.load(blend_path)["map"]).unsqueeze(0)
+            else: 
+                raise FileExistsError(f"Blend map path does not exist: '{blend_path}'.")
+            
+            # Apply transforms if provided
+            if self.transform:
+                img, coords, target_map = self.transform(img, coords, target_map)
 
-        # Generate target map from coordinates
-        _, H, W = img.shape
-        target_map = self.target_map_fun(coords, H, W, *self.target_map_args, **self.target_map_kwargs) 
-        target_map = target_map.unsqueeze(0) # Add dim s.t. target maps are later of dim (B,1,H,W) matching model output
-        # NOTE: TypeError? -> Check config for target_map_fun - target_map_args mismatch
+        else:
+            # Apply transforms if provided
+            if self.transform:
+                img, coords = self.transform(img, coords)
+
+            # Generate target map from coordinates
+            _, H, W = img.shape
+            target_map = self.target_map_fun(coords, H, W, *self.target_map_args, **self.target_map_kwargs) 
+            target_map = target_map.unsqueeze(0) # Add dim s.t. target maps are later of dim (B,1,H,W) matching model output
+            # NOTE: TypeError? -> Check config for target_map_fun - target_map_args mismatch
 
         return img, target_map, coords
     
@@ -140,22 +157,43 @@ def get_dataloader(split: str,
     if split == "train":
         data_root  = cfg["paths"]["train_data"]
         shuffle = True
+    elif split == "val":
+        data_root = cfg["paths"]["val_data"]
+        shuffle = False
+    elif split == "test":
+        data_root = cfg["paths"]["test_data"]
+        shuffle = False
+    else:
+        raise KeyError("split must be one of {'train', 'val', 'test'}.")
+
+    # Create dataset
+    ds = TrichomeDataset(root=data_root,
+                         transform=get_transforms(split, cfg),
+                         use_blend_maps=cfg["target_map"].get("use_blend_maps", False),
+                         target_map_fun=tmf,
+                        **cfg["target_map"]["target_map_args"])
+    
+    # Create dataloader
+    dataloader = DataLoader(dataset=ds,
+                    batch_size=cfg["training"]["batch_size"],
+                    shuffle=shuffle,
+                    collate_fn=collate_fn)
+
+    return dataloader
+
+def get_transforms(split, cfg):
+    """
+    TODO: Add docsting.
+    """
+    if split == "train":
         transform_list = [
             transforms.ResizeShortSide(cfg["transforms"]["short_side"]),
+            transforms.PadToMultipleOf32(),
             transforms.RandomHorizontalFlip(),
             transforms.RandomVerticalFlip(),
             transforms.RandomBrightness(cfg["transforms"]["brightness"])
         ]
-    elif split == "val":
-        data_root = cfg["paths"]["val_data"]
-        shuffle = False
-        transform_list = [
-            transforms.ResizeShortSide(cfg["transforms"]["short_side"]),
-            transforms.PadToMultipleOf32()
-        ]
-    elif split == "test":
-        data_root = cfg["paths"]["test_data"]
-        shuffle = False
+    elif split == "val" or split == "test":
         transform_list = [
             transforms.ResizeShortSide(cfg["transforms"]["short_side"]),
             transforms.PadToMultipleOf32()
@@ -169,16 +207,61 @@ def get_dataloader(split: str,
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         )
 
-    # Create dataset
-    ds = TrichomeDataset(root=data_root,
-                         transform=transforms.Compose(transform_list),
-                         target_map_fun=tmf,
-                        **cfg["target_map"]["target_map_args"])
-    
-    # Create dataloader
-    dataloader = DataLoader(dataset=ds,
-                    batch_size=cfg["training"]["batch_size"],
-                    shuffle=shuffle,
-                    collate_fn=collate_fn)
+    return transforms.Compose(transform_list)
 
-    return dataloader
+def generate_blend_maps(split, model, cfg, target_map_fun, alpha_blend, device):
+    """
+    TODO: Add docstring
+    """
+    # Get data path
+    if split == "train":
+        root = Path(cfg["paths"]["train_data"])
+    elif split == "val":
+        root = Path(cfg["paths"]["val_data"])
+    elif split == "test":
+        root = Path(cfg["paths"]["test_data"])
+    else:
+        raise KeyError("Split must be one of /{'train', 'val', 'test'}.")
+    
+    # Make output dir
+    out_dir = root / "blend_maps"
+    out_dir.mkdir(exist_ok=True)
+
+    # Setup transformtion (use val split transformations to get consistent 
+    # target maps not influenced by training transformations)
+    transform = get_transforms(split="val", cfg=cfg)
+
+    model.eval().to(device)
+    image_paths = sorted((root / "images").glob("*.jpg"))
+
+    with torch.no_grad():
+        for img_path in image_paths:
+
+            # Load img + coords, transform to tensors
+            img = cv2.cvtColor(cv2.imread(str(img_path)), cv2.COLOR_BGR2RGB)
+            img = torch.from_numpy(img).permute(2,0,1).float() / 255.0
+            coord_path = root / "coords" / f"{img_path.stem}.npy"
+            coords = torch.from_numpy(np.load(coord_path)).float()
+
+            # Apply trasformations
+            img, coords = transform(img, coords)
+
+            # Get target map
+            _, H, W = img.shape
+            target_map = target_map_fun(coords, H, W, **cfg["target_map"]["target_map_args"]) 
+
+            # Make predictions
+            pred  = model(img.unsqueeze(0).to(device)).squeeze().cpu()
+            pred  = pred * (target_map.sum() / pred.sum().clamp(1e-6))  # match scale
+
+            # Get blended map
+            blended = alpha_blend * pred + (1 - alpha_blend) * target_map
+
+            # Normalize blended map
+            blended = blended / blended.sum() * len(coords)
+
+            # save compressed maps
+            np.savez_compressed(out_dir / f"{img_path.stem}.npz",
+                                map=blended.numpy().astype(np.float32))
+
+    print(f"[INFO] Saved {len(image_paths)} blend maps to {out_dir}")

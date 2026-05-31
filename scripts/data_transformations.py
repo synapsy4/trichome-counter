@@ -28,7 +28,8 @@ class Compose:
 
     def __call__(self, 
                  image: torch.Tensor, 
-                 coords: torch.Tensor
+                 coords: torch.Tensor,
+                 blend_map: torch.Tensor = None
                  ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Apply all transforms sequentially.
@@ -48,9 +49,14 @@ class Compose:
             Transformed point coordinates.
         """
         # Apply transforms sequentially
-        for t in self.transforms:
-            image, coords = t(image, coords)
-        return image, coords
+        if blend_map is None:
+            for t in self.transforms:
+                image, coords = t(image, coords)
+            return image, coords
+        else:
+            for t in self.transforms:
+                image, coords, blend_map = t(image, coords, blend_map)
+            return image, coords, blend_map
     
 
 class ResizeShortSide:
@@ -72,7 +78,8 @@ class ResizeShortSide:
 
     def __call__(self, 
                  image: torch.Tensor, 
-                 coords: torch.Tensor
+                 coords: torch.Tensor,
+                 blend_map: torch.Tensor = None
                  ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Resize image and scale coordinates.
@@ -110,8 +117,16 @@ class ResizeShortSide:
         # Scale coordinates
         coords = coords * scale
 
-        return image, coords
-    
+        if blend_map is not None:
+            blend_map = F.interpolate(
+                blend_map.unsqueeze(0), size=(new_H, new_W),
+                mode="bilinear", align_corners=False
+            ).squeeze(0)
+
+            return image, coords, blend_map
+        else:
+            return image, coords
+
 
 class RandomCrop:
     """
@@ -143,7 +158,8 @@ class RandomCrop:
 
     def __call__(self, 
                  image: torch.Tensor, 
-                 coords: torch.Tensor
+                 coords: torch.Tensor,
+                 blend_map: torch.Tensor = None
                  ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Apply random crop to image and coordinates.
@@ -178,8 +194,7 @@ class RandomCrop:
         x0 = torch.randint(0, W - self.crop_w + 1, (1,)).item()
 
         # Copy image and apply crop to copy
-        image = image.clone()
-        image = image[:,y0:y0+self.crop_h,x0:x0+self.crop_w]
+        image = image[:,y0:y0+self.crop_h,x0:x0+self.crop_w].clone()
 
         # Update cropped image coordinates based on sampled upper left corner
         if len(coords) > 0:
@@ -195,7 +210,11 @@ class RandomCrop:
                 (coords[:, 1] < self.crop_h)
             )
 
-            return image, coords[mask]
+            coords = coords[mask]
+
+        if blend_map is not None:
+            blend_map = blend_map[:, y0:y0+self.crop_h, x0:x0+self.crop_w].clone()
+            return image, coords, blend_map
         else:
             return image, coords
     
@@ -219,7 +238,8 @@ class RandomHorizontalFlip:
 
     def __call__(self, 
                  image: torch.Tensor, 
-                 coords: torch.Tensor
+                 coords: torch.Tensor,
+                 blend_map: torch.Tensor = None
                  ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Apply random horizontal flip.
@@ -240,7 +260,7 @@ class RandomHorizontalFlip:
         """
         # By chance return data without flip
         if torch.rand(1).item() > self.p:
-            return image, coords
+            return (image, coords, blend_map) if blend_map is not None else (image, coords)
 
         # Flip image
         _, _, W = image.shape
@@ -251,7 +271,11 @@ class RandomHorizontalFlip:
             coords = coords.clone()
             coords[:, 0] = W - 1 - coords[:, 0]
 
-        return image, coords
+        if blend_map is not None:
+            blend_map = torch.flip(blend_map, dims=[2])
+            return image, coords, blend_map
+        else:
+            return image, coords
     
 
 class RandomVerticalFlip:
@@ -273,7 +297,8 @@ class RandomVerticalFlip:
 
     def __call__(self, 
                  image: torch.Tensor, 
-                 coords: torch.Tensor
+                 coords: torch.Tensor,
+                 blend_map: torch.Tensor = None
                  ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Apply random vertical flip.
@@ -294,7 +319,7 @@ class RandomVerticalFlip:
         """
         # By chance return data without flip
         if torch.rand(1).item() > self.p:
-            return image, coords
+            return (image, coords, blend_map) if blend_map is not None else (image, coords)
         
         # Flip image along vertical axis (=0)
         _, H, _ = image.shape
@@ -305,7 +330,11 @@ class RandomVerticalFlip:
             coords = coords.clone()
             coords[:, 1] = H - 1 - coords[:, 1]
 
-        return image, coords
+        if blend_map is not None:
+            blend_map = torch.flip(blend_map, dims=[1])
+            return image, coords, blend_map
+        else:
+            return image, coords
     
 
 
@@ -331,7 +360,8 @@ class RandomBrightness:
 
     def __call__(self, 
                  image: torch.Tensor, 
-                 coords: torch.Tensor
+                 coords: torch.Tensor,
+                 blend_map: torch.Tensor = None
                  ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Adjust image brightness.
@@ -360,7 +390,7 @@ class RandomBrightness:
         image = image * factor
         image = torch.clamp(image, 0.0, 1.0)
 
-        return image, coords
+        return (image, coords, blend_map) if blend_map is not None else (image, coords)
     
 class RandomRotate90:
     """
@@ -382,7 +412,8 @@ class RandomRotate90:
 
     def __call__(self, 
                  image: torch.Tensor, 
-                 coords: torch.Tensor
+                 coords: torch.Tensor,
+                 blend_map: torch.Tensor = None
                  ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Apply random 90° clockwise rotation.
@@ -403,7 +434,7 @@ class RandomRotate90:
         """
         # By chance return data without rotation
         if torch.rand(1).item() > self.p:
-            return image, coords
+            return (image, coords, blend_map) if blend_map is not None else (image, coords)
 
         _, H, _ = image.shape
 
@@ -421,7 +452,11 @@ class RandomRotate90:
             coords[:, 0] = H - 1 - y
             coords[:, 1] = x
 
-        return image, coords
+        if blend_map is not None:
+            blend_map = torch.rot90(blend_map, k=-1, dims=[1, 2])
+            return image, coords, blend_map
+        else:
+            return image, coords
 
 
 class PadToMultipleOf32:
@@ -443,7 +478,8 @@ class PadToMultipleOf32:
 
     def __call__(self, 
                  image: torch.Tensor, 
-                 coords: torch.Tensor
+                 coords: torch.Tensor,
+                 blend_map: torch.Tensor = None
                  ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Pad image to nearest multiple of 32.
@@ -481,7 +517,11 @@ class PadToMultipleOf32:
             value=0
         )
 
-        return image, coords
+        if blend_map is not None:
+            blend_map = F.pad(blend_map, (0, pad_w, 0, pad_h), mode="constant", value=0)
+            return image, coords, blend_map
+        else:
+            return image, coords
     
 class Normalize:
     """
@@ -505,7 +545,8 @@ class Normalize:
 
     def __call__(self,
                  image: torch.Tensor,
-                 coords: torch.Tensor
+                 coords: torch.Tensor,
+                 blend_map: torch.Tensor = None
                  ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Normalize image and pass coordinates through unchanged.
@@ -526,4 +567,4 @@ class Normalize:
         """
         image = (image - self.mean) / self.std
 
-        return image, coords
+        return (image, coords, blend_map) if blend_map is not None else (image, coords)

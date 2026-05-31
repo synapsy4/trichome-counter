@@ -167,11 +167,9 @@ Saved artifacts:
 - latest checkpoint
 - best checkpoint
 - training logs
-- evaluation metrics
 
 These are stored in:
 - `models/`
-- `outputs/`
 
 ---
 
