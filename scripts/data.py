@@ -122,7 +122,6 @@ class TrichomeDataset(Dataset):
             # Apply transforms if provided
             if self.transform:
                 img, coords, target_map = self.transform(img, coords, target_map)
-
         else:
             # Apply transforms if provided
             if self.transform:
@@ -131,8 +130,8 @@ class TrichomeDataset(Dataset):
             # Generate target map from coordinates
             _, H, W = img.shape
             target_map = self.target_map_fun(coords, H, W, *self.target_map_args, **self.target_map_kwargs) 
-            target_map = target_map.unsqueeze(0) # Add dim s.t. target maps are later of dim (B,1,H,W) matching model output
             # NOTE: TypeError? -> Check config for target_map_fun - target_map_args mismatch
+            target_map = target_map.unsqueeze(0) # Add dim s.t. target maps are later of dim (B,1,H,W) matching model output
 
         return img, target_map, coords
     
@@ -252,13 +251,19 @@ def generate_blend_maps(split, model, cfg, target_map_fun, alpha_blend, device):
 
             # Make predictions
             pred  = model(img.unsqueeze(0).to(device)).squeeze().cpu()
-            pred  = pred * (target_map.sum() / pred.sum().clamp(1e-6))  # match scale
+
+            total_count = len(coords)
+            if total_count > 0:
+                pred  = pred * (target_map.sum() / pred.sum().clamp(1e-6))  # match scale
+            else:
+                pred = torch.zeros_like(pred)
 
             # Get blended map
             blended = alpha_blend * pred + (1 - alpha_blend) * target_map
 
             # Normalize blended map
-            blended = blended / blended.sum() * len(coords)
+            if total_count > 0:
+                blended = blended / blended.sum().clamp(1e-6) * total_count
 
             # save compressed maps
             np.savez_compressed(out_dir / f"{img_path.stem}.npz",

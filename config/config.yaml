@@ -1,7 +1,7 @@
 training:
-  batch_size: 16                            # Tran/val/test batch size
+  batch_size: 16                           # Tran/val/test batch size
   lr: 1.0e-4                                # Learning rate
-  epochs: 5                                 # Training epochs
+  epochs: 2                                 # Training epochs
   weight_decay: 1.0e-4                      # Weight decay
   optimizer: "AdamW"                        # Optimizer
 
@@ -14,7 +14,7 @@ target_map:
   target_map_fun: "generate_density_map"    # Function id to create target map
   target_map_args: 
     sigma: 10                               # Target density map standard deviation
-  use_blend_maps: true                      # If true, pregenerated target maps are used
+  use_blend_maps: true                     # If true, pregenerated target maps are used
 
 model:
   model_name: "model1_density10norm"             # Model name

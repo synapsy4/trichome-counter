@@ -49,7 +49,7 @@ def train_one_epoch(model: torch.nn.Module,
         loss.backward()
         optimizer.step()
 
-        total_loss+= loss.item()
+        total_loss += loss.item()
 
         # Monitor count-level MAE
         pred_count = pred_density.sum(dim=[1, 2, 3])
