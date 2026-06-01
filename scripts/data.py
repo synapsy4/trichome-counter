@@ -254,19 +254,20 @@ def generate_blend_maps(split, model, cfg, target_map_fun, alpha_blend, device):
 
             total_count = len(coords)
             if total_count > 0:
-                pred  = pred * (target_map.sum() / pred.sum().clamp(1e-6))  # match scale
-            else:
-                pred = torch.zeros_like(pred)
-
-            # Get blended map
-            blended = alpha_blend * pred + (1 - alpha_blend) * target_map
-
-            # Normalize blended map
-            if total_count > 0:
+                # match scale
+                pred  = pred * (target_map.sum() / pred.sum().clamp(1e-6))  
+                # Get blended map
+                blended = alpha_blend * pred + (1 - alpha_blend) * target_map
+                # Normalize blended map
                 blended = blended / blended.sum().clamp(1e-6) * total_count
+            else:
+                # No coords -> flat target
+                blended = torch.zeros_like(pred)
 
+
+    
             # save compressed maps
             np.savez_compressed(out_dir / f"{img_path.stem}.npz",
                                 map=blended.numpy().astype(np.float32))
 
-    print(f"[INFO] Saved {len(image_paths)} blend maps to {out_dir}")
+    print(f"[INFO] Saved {len(image_paths)} blend maps to '{out_dir}'")

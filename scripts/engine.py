@@ -6,6 +6,7 @@ from typing import Any
 
 from tqdm.auto import tqdm
 import torch
+from torch.utils.tensorboard import SummaryWriter
 
 from scripts import utils
 
@@ -171,6 +172,15 @@ def train(model: torch.nn.Module,
     device : torch.device
         Device on which the model and data are processed ("cpu" or "cuda").
     """
+
+    # Init writers
+    model_name = cfg["model"]["model_name"]
+    writer = SummaryWriter(log_dir=f"tb_logs/{model_name}")   
+    overview = utils.load_overview(model_name, cfg["paths"]["models"])
+    epoch_offset = overview["epochs"]  if overview else 0
+    run_name = f"{model_name}_ep{epoch_offset+1}-{epoch_offset+cfg['training']['epochs']}" 
+    hparam_writer = SummaryWriter(log_dir=f"tb_logs/{model_name}/hparams/{run_name}")
+    
     # Things we want to save
     best_epoch = 1
     best_epoch_val_mae = None
@@ -183,7 +193,8 @@ def train(model: torch.nn.Module,
     n_epochs = cfg["training"]["epochs"]
     
     # Run training loop
-    for epoch in tqdm(range(1,n_epochs+1), desc="Epochs"):
+    pbar = tqdm(range(1,n_epochs+1), desc="Epochs")
+    for epoch in pbar:
 
         # Train step
         train_dl = tqdm(train_dataloader, desc=f"Train epoch {epoch}", leave=False)
@@ -210,9 +221,17 @@ def train(model: torch.nn.Module,
         train_mae_list.append(train_mae)
         val_loss_list.append(val_loss)
         val_mae_list.append(val_mae)
-        
+
+        # Add scalars to writer
+        global_step = epoch_offset + epoch
+        writer.add_scalars("Loss", {"train": train_loss, "val": val_loss}, global_step)
+        writer.add_scalars("MAE",  {"train": train_mae,  "val": val_mae},  global_step)
+
         # Print status
-        print(f"Epoch {epoch:03d} | Train-loss={train_loss:.2f}, train-mae={train_mae:.2f} | Val-loss={val_loss:.2f}, val-mae={val_mae:.2f}")
+        pbar.set_postfix({
+            "tr-loss": f"{train_loss:.2f}", "tr-mae": f"{train_mae:.2f}",
+            "val-loss": f"{val_loss:.2f}", "val-mae": f"{val_mae:.2f}",
+        })
 
     # Write metric dict
     metrics = {
@@ -224,6 +243,18 @@ def train(model: torch.nn.Module,
         "val_mae_list": val_mae_list
         }
 
+    # Add hparams to writer
+    if overview:
+        global_best_mae = min(overview["best_val_mae"], round(best_epoch_val_mae, 3))
+        global_best_epoch = overview["best_epoch"] if global_best_mae < best_epoch_val_mae else epoch_offset + best_epoch
+    else:
+        global_best_mae = round(best_epoch_val_mae, 3)
+        global_best_epoch = best_epoch
+    hparam_writer.add_hparams(utils.flatten_dict(cfg), {
+        "hparam/best_val_mae": global_best_mae,
+        "hparam/best_epoch":   global_best_epoch,
+    })
+    
     # Save model
     utils.save_model(last_cp=model.state_dict(),
                      optim_cp=optimizer.state_dict(),

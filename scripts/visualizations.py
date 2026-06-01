@@ -46,6 +46,9 @@ def plot_image(img: torch.Tensor | np.ndarray,
 
     if img_np.shape[0] == 3:
         img_np = np.transpose(img_np, (1, 2, 0))
+    
+    if img_np.min() < 0 or img_np.max() > 1:
+        img_np = (img_np - img_np.min()) / (img_np.max() - img_np.min())
 
     # Plot image
     ax.imshow(img_np)
@@ -98,6 +101,9 @@ def plot_density_map(density: torch.Tensor,
 
         if img_np.shape[0] == 3:
             img_np = np.transpose(img_np, (1, 2, 0))
+        
+        if img_np.min() < 0 or img_np.max() > 1:
+            img_np = (img_np - img_np.min()) / (img_np.max() - img_np.min())
 
         # Plot image
         ax.imshow(img_np)

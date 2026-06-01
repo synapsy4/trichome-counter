@@ -1,7 +1,7 @@
 training:
   batch_size: 16                           # Tran/val/test batch size
-  lr: 1.0e-4                                # Learning rate
-  epochs: 2                                 # Training epochs
+  lr: 1.0e-5                                # Learning rate
+  epochs: 1                                 # Training epochs
   weight_decay: 1.0e-4                      # Weight decay
   optimizer: "AdamW"                        # Optimizer
 

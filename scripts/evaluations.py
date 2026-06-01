@@ -20,9 +20,9 @@ def predict_single_image(model: torch.nn.Module,
     model : torch.nn.Module
         Trained model.
     img : torch.Tensor
-        RGB image tensor of shape [3, H, W], normalized to [0, 1].
+        RGB image tensor of shape [3, H, W].
     device : torch.device
-        Device on which the model and data are processed ("cpu" or "cuda").
+        Device to run inference on.
 
     Returns
     -------

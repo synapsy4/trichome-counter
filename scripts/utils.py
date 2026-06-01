@@ -355,6 +355,39 @@ def get_model_instance_path(model_dir: str | Path,
         raise KeyError("Model cp must be one of \{'last','best'\}")
     return model_instance_path
 
+def load_overview(model_name: str,
+                  root: Path | str = "models"
+                  ) -> dict:
+    """
+    TODO: Add docstring
+    """
+    model_dir = Path(root) / model_name
+    overview_path = model_dir / "overview.json"
+
+    # Load overview
+    if overview_path.exists():
+        with open(overview_path, "r") as f:
+            return json.load(f)
+    else:
+        return None
+    
+def flatten_dict(d: dict[str, Any], 
+                 parent_key: str = ""
+                 ) -> dict[str, Any]:
+    """
+    TODO: Add docstirng
+    """
+    items = {}
+    for k, v in d.items():
+        key = f"{parent_key}/{k}" if parent_key else k
+        if isinstance(v, dict):
+            items.update(flatten_dict(v, key))
+        elif v is None:
+            items[key] = "null"  # convert to string
+        else:
+            items[key] = v
+    return items
+
 
 def load_model(model_name: str,
                cp: str = "last",
