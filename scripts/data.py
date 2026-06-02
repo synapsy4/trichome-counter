@@ -5,9 +5,10 @@ Class for creating custom PyTorch dataset and dataloader setup.
 from pathlib import Path
 from typing import Callable, Any
 
-import torch
-import numpy as np
 import cv2
+import numpy as np
+import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 
@@ -229,6 +230,7 @@ def generate_blend_maps(split, model, cfg, target_map_fun, alpha_blend, device):
     # Setup transformtion (use val split transformations to get consistent 
     # target maps not influenced by training transformations)
     transform = get_transforms(split="val", cfg=cfg)
+    print("[WARNING] Only generate blend maps based on models where no crop is applied, s.t. blend maps can be upsampled to the orignal image scale.")
 
     model.eval().to(device)
     image_paths = sorted((root / "images").glob("*.jpg"))
@@ -242,15 +244,35 @@ def generate_blend_maps(split, model, cfg, target_map_fun, alpha_blend, device):
             coord_path = root / "coords" / f"{img_path.stem}.npy"
             coords = torch.from_numpy(np.load(coord_path)).float()
 
+            _, H_orig, W_orig = img.shape
+
             # Apply trasformations
             img, coords = transform(img, coords)
 
-            # Get target map
-            _, H, W = img.shape
-            target_map = target_map_fun(coords, H, W, **cfg["target_map"]["target_map_args"]) 
+            _, H_t, W_t = img.shape
 
             # Make predictions
             pred  = model(img.unsqueeze(0).to(device)).squeeze().cpu()
+
+            # Upsample prediction back to original image space
+            pred = F.interpolate(
+                pred.unsqueeze(0).unsqueeze(0),
+                size=(H_orig, W_orig),
+                mode="bilinear",
+                align_corners=False
+            ).squeeze()  # (H_orig, W_orig)
+
+            # Get target map (on transformed input to align with how it is applied in the dataset class)
+            target_map = target_map_fun(coords, H_t, W_t,
+                                        **cfg["target_map"]["target_map_args"])     
+            
+            # Upsample target maps back to original image space
+            target_map = F.interpolate(
+                target_map.unsqueeze(0).unsqueeze(0),
+                size=(H_orig, W_orig),
+                mode="bilinear",
+                align_corners=False
+            ).squeeze()  # (H_orig, W_orig)
 
             total_count = len(coords)
             if total_count > 0:

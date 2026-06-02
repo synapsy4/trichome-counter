@@ -1,6 +1,6 @@
 training:
   batch_size: 16                           # Tran/val/test batch size
-  lr: 1.0e-5                                # Learning rate
+  lr: 1.0e-6                                # Learning rate
   epochs: 1                                 # Training epochs
   weight_decay: 1.0e-4                      # Weight decay
   optimizer: "AdamW"                        # Optimizer
@@ -17,17 +17,17 @@ target_map:
   use_blend_maps: true                     # If true, pregenerated target maps are used
 
 model:
-  model_name: "model1_density10norm"             # Model name
+  model_name: "model1_density10pretrain"             # Model name
   model_type: "density-model"               # Type of model
   activation: "ReLUTanh"                    # Last layer activation
   # Transfer learning (ignored when resuming an existing model_name or pre_model_name = null)
-  pre_model_name: null        # null = no transfer learning
+  pre_model_name: "model0_density10"        # null = no transfer learning
   pre_cp: "best"                            # "last" = last checkpoint; "best" = best checkpoint
   
 transforms:
   short_side: 512                           # Short side len of transformed image
   brightness: 0.2                           # Random brightness scale parameter
-  imagenet_normalization: true              # false for models not pretrained on ImageNet
+  imagenet_normalization: false              # false for models not pretrained on ImageNet
 
 paths:
   train_data: "data/preprocessed/train"     # Path to training data

@@ -2,11 +2,7 @@
 Functions to generate and visualize target maps based on trichome coordinates.
 """
 
-from typing import Any
-
 import torch
-import matplotlib
-import matplotlib.pyplot as plt
 
 
 def generate_density_map(coords: torch.Tensor, 

@@ -85,6 +85,8 @@ TrichomeCounter/
 │   ├── utils.py
 │   └── visualizations.py
 │
+├── tb_logs/                # Tensorboard event logs
+│
 ├── exploration.ipynb       # Data exploration and experiments
 ├── requirements.txt
 ├── train.py                # Training entry point

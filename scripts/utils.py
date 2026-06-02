@@ -14,8 +14,6 @@ from collections.abc import Iterator
 import numpy as np
 import cv2
 import torch
-import matplotlib
-import matplotlib.pyplot as plt
 import scipy.io as sio
 
 from scripts import models
