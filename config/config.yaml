@@ -1,14 +1,14 @@
 training:
   batch_size: 16                           # Tran/val/test batch size
-  lr: 1.0e-6                                # Learning rate
-  epochs: 1                                 # Training epochs
+  lr: 1.0e-5                                # Learning rate
+  epochs: 4                                 # Training epochs
   weight_decay: 1.0e-4                      # Weight decay
   optimizer: "AdamW"                        # Optimizer
 
 loss:
   loss_fun: "DensityCountLoss"              # Loss function
   loss_args: 
-    lbda_count: 0.5                         # Count loss weight
+    lbda_count: 2                         # Count loss weight
 
 target_map:
   target_map_fun: "generate_density_map"    # Function id to create target map

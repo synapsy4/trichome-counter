@@ -142,7 +142,27 @@ def get_dataloader(split: str,
                     cfg: dict[str, Any]
                     ) -> torch.utils.data.DataLoader:
     """
-    TODO: Add function info.
+    Build a DataLoader for a given data split.
+
+    Parameters
+    ----------
+    split : {'train', 'val', 'test'}
+        Dataset split to load. Training split is shuffled; validation
+        and test splits are not.
+    cfg : dict
+        Config dict.
+
+    Returns
+    -------
+    dataloader : torch.utils.data.DataLoader
+        DataLoader for the specified split.
+
+    Raises
+    ------
+    ValueError
+        If split is not one of {'train', 'val', 'test'}.
+    ValueError
+        If the target map function specified in cfg is not recognised.
     """
 
     # Set target map function 
@@ -151,7 +171,7 @@ def get_dataloader(split: str,
     elif cfg["target_map"]["target_map_fun"] == "generate_density_map_adaptive":
         tmf = generate_density_map_adaptive
     else:
-        raise KeyError("Unknown target map function. Specify existing target map function in config file.")
+        raise ValueError("Unknown target map function. Specify existing target map function in config file.")
     
     # Set dataset args according to split
     if split == "train":
@@ -164,7 +184,7 @@ def get_dataloader(split: str,
         data_root = cfg["paths"]["test_data"]
         shuffle = False
     else:
-        raise KeyError("split must be one of {'train', 'val', 'test'}.")
+        raise ValueError("split must be one of {'train', 'val', 'test'}.")
 
     # Create dataset
     ds = TrichomeDataset(root=data_root,
@@ -181,9 +201,33 @@ def get_dataloader(split: str,
 
     return dataloader
 
-def get_transforms(split, cfg):
+def get_transforms(split: str, 
+                   cfg: dict[str, Any]
+                   ) -> transforms.Compose:
     """
-    TODO: Add docsting.
+    Build the transform pipeline for a given data split.
+
+    Training splits receive augmentation transforms (random flips,
+    brightness jitter) in addition to resizing and padding. Validation
+    and test splits receive only resizing and padding. ImageNet
+    normalisation is appended to all splits if enabled in cfg.
+
+    Parameters
+    ----------
+    split : {'train', 'val', 'test'}
+        Dataset split to build transforms for.
+    cfg : dict
+        Config dict.
+
+    Returns
+    -------
+    transform : transforms.Compose
+        Composed transform pipeline for the specified split.
+
+    Raises
+    ------
+    ValueError
+        If split is not one of {'train', 'val', 'test'}.
     """
     if split == "train":
         transform_list = [
@@ -199,7 +243,7 @@ def get_transforms(split, cfg):
             transforms.PadToMultipleOf32()
         ]
     else:
-        raise KeyError("split must be one of {'train', 'val', 'test'}.")
+        raise ValueError("split must be one of {'train', 'val', 'test'}.")
     
     # Add imagenet normalization if specified
     if cfg["transforms"]["imagenet_normalization"]:
@@ -209,9 +253,46 @@ def get_transforms(split, cfg):
 
     return transforms.Compose(transform_list)
 
-def generate_blend_maps(split, model, cfg, target_map_fun, alpha_blend, device):
+def generate_blend_maps(split: str,
+                        model: torch.nn.Module,
+                        cfg: dict[str, Any],
+                        target_map_fun: Callable,
+                        alpha_blend: float,
+                        device: torch.device
+                        ) -> None:
     """
-    TODO: Add docstring
+    Generate and save blend maps for all images in a data split.
+
+    Blend maps are a weighted combination of the model's predicted
+    density map and the ground-truth target map, scaled to preserve
+    total count. They are saved as compressed .npz files under
+    <data_root>/blend_maps/ and can be used in subsequent training
+    runs via the use_blend_maps option.
+
+    Note: only use models trained without cropping augmentation, as
+    blend maps are upsampled back to the original image resolution and
+    spatial consistency is required.
+
+    Parameters
+    ----------
+    split : str
+        Data split for which blend maps are generated.
+    model : torch.nn.Module
+        Trained density estimation model used to produce predictions.
+    cfg : dict
+        Config dict.
+    target_map_fun : callable
+        Function to generate ground-truth target maps from coordinates.
+    alpha_blend : float
+        Blending weight in [0, 1]. A value of 1.0 uses the model
+        prediction only; 0.0 uses the target map only.
+    device : torch.device
+        Device on which to run model inference.
+
+    Raises
+    ------
+    ValueError
+        If split is not one of {'train', 'val', 'test'}.
     """
     # Get data path
     if split == "train":
@@ -221,7 +302,7 @@ def generate_blend_maps(split, model, cfg, target_map_fun, alpha_blend, device):
     elif split == "test":
         root = Path(cfg["paths"]["test_data"])
     else:
-        raise KeyError("Split must be one of /{'train', 'val', 'test'}.")
+        raise ValueError("Split must be one of /{'train', 'val', 'test'}.")
     
     # Make output dir
     out_dir = root / "blend_maps"
@@ -285,8 +366,6 @@ def generate_blend_maps(split, model, cfg, target_map_fun, alpha_blend, device):
             else:
                 # No coords -> flat target
                 blended = torch.zeros_like(pred)
-
-
     
             # save compressed maps
             np.savez_compressed(out_dir / f"{img_path.stem}.npz",

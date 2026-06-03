@@ -332,8 +332,30 @@ def get_model_instance_path(model_dir: str | Path,
                             cp: str = "last"
                             ) -> Path:
     """
-    TODO: Add docstring
+    Resolve the path to a specific model run directory.
+
+    Parameters
+    ----------
+    model_dir : str or Path
+        Path to the model directory containing individual run
+        subdirectories (e.g. run_001, run_002, ...).
+    cp : {'last', 'best'}, optional
+        Which run to resolve. 'last' selects the run with the highest
+        index, 'best' selects the run recorded in overview.json.
+        Defaults to 'last'.
+
+    Returns
+    -------
+    model_instance_path : Path
+        Path to the resolved run directory (e.g. model_dir/run_003).
+
+    Raises
+    ------
+    ValueError
+        If cp is not one of {'last', 'best'}.
     """
+    model_dir = Path(model_dir)
+
     # Load last training run path
     if cp == "last":
         model_list = [p.name for p in model_dir.iterdir() if p.is_dir()]
@@ -350,14 +372,28 @@ def get_model_instance_path(model_dir: str | Path,
         model_instance_id = f"run_{best_run_id:03d}"
         model_instance_path = Path(model_dir) / model_instance_id
     else:
-        raise KeyError("Model cp must be one of \{'last','best'\}")
+        raise ValueError("Model cp must be one of \{'last','best'\}")
     return model_instance_path
 
 def load_overview(model_name: str,
                   root: Path | str = "models"
-                  ) -> dict:
+                  ) -> dict | None:
     """
-    TODO: Add docstring
+    Load the overview JSON for a given model.
+
+    Parameters
+    ----------
+    model_name : str
+        Name of the model, used as the subdirectory name under root.
+    root : Path or str, optional
+        Root directory containing model subdirectories.
+        Defaults to 'models'.
+
+    Returns
+    -------
+    overview : dict
+        Parsed contents of overview.json, or None if the file does
+        not exist.
     """
     model_dir = Path(root) / model_name
     overview_path = model_dir / "overview.json"
@@ -373,15 +409,42 @@ def flatten_dict(d: dict[str, Any],
                  parent_key: str = ""
                  ) -> dict[str, Any]:
     """
-    TODO: Add docstirng
+    Flatten a nested dictionary into a single-level dictionary.
+
+    Keys are joined with '/' to reflect the original nesting depth.
+    None values are converted to the string 'null'.
+
+    Parameters
+    ----------
+    d : dict
+        Dictionary to flatten, potentially containing nested
+        dictionaries at arbitrary depth.
+    parent_key : str, optional
+        Prefix to prepend to all keys, used internally during
+        recursion. Defaults to ''.
+
+    Returns
+    -------
+    items : dict
+        Flattened dictionary with compound '/' separated keys.
+
+    Examples
+    --------
+    >>> flatten_dict({'a': 1, 'b': {'c': 2, 'd': {'e': 3}}})
+    {'a': 1, 'b/c': 2, 'b/d/e': 3}
+    >>> flatten_dict({'a': None, 'b': {'c': None}})
+    {'a': 'null', 'b/c': 'null'}
     """
     items = {}
     for k, v in d.items():
+        # Generate new key if parent key given
         key = f"{parent_key}/{k}" if parent_key else k
+        # Recursively flatten inner dicts
         if isinstance(v, dict):
             items.update(flatten_dict(v, key))
+        # Convert None to string
         elif v is None:
-            items[key] = "null"  # convert to string
+            items[key] = "null"  
         else:
             items[key] = v
     return items
@@ -415,9 +478,9 @@ def load_model(model_name: str,
     ------
     FileNotFoundError
         If the specified model directory does not exist.
-    KeyError
+    ValueError
         If chosen cp does not exist.
-    TypeError
+    ValueError
         If the model type specified in metadata is not implemented.
     
     Notes
@@ -444,7 +507,7 @@ def load_model(model_name: str,
         print("[WARNING] 'best' cp chosen. Should only be used for evaluation or transfer learning. Otherwise number of training epochs is logged incorrectly + optimizer has later state.")
         cp_file = "best_cp.pth"
     else:
-        raise KeyError("CP must be one of \{'last','best'\}")
+        raise ValueError("CP must be one of \{'last','best'\}")
 
     # Load config of model
     model_instance_path = get_model_instance_path(model_dir, cp)
@@ -460,7 +523,7 @@ def load_model(model_name: str,
         print(f"[INFO] Loaded model from '{model_path}'.")
         return model
     else:
-        raise TypeError(f"Model type {model_type} unknown. Update of load_model function required.")
+        raise ValueError(f"Model type {model_type} unknown. Update of load_model function required.")
     
 def init_model(cfg: dict[str, Any],
                cp: str = "last", 
@@ -495,9 +558,9 @@ def init_model(cfg: dict[str, Any],
     ------
     InterruptedError
         If the user chooses to exit.
-    TypeError
+    ValueError
         If the model type is not implemented or the pretrained type differs.
-    KeyError
+    ValueError
         If pretrained model does not exist.
     """
     continue_training = False
@@ -529,7 +592,7 @@ def init_model(cfg: dict[str, Any],
     elif cfg["model"]["pre_model_name"]:
 
         if cfg["model"]["pre_model_name"] not in model_names:
-            raise KeyError(f"Pretrained model {cfg['model']['pre_model_name']} not found in existing models.")
+            raise ValueError(f"Pretrained model {cfg['model']['pre_model_name']} not found in existing models.")
         
         # Get pretrained model path (last or specified run)
         pre_model_dir = Path(models_dir) / cfg["model"]["pre_model_name"]
@@ -541,7 +604,7 @@ def init_model(cfg: dict[str, Any],
 
         # Conflict case 1: Model type mismatch
         if pre_model_cfg["model"]["model_type"] != cfg["model"]["model_type"]:
-            raise TypeError("Model type of pretrained model must be equal to model type of new model.")
+            raise ValueError("Model type of pretrained model must be equal to model type of new model.")
         # Conflict case 2: Activation function mismatch
         if pre_model_cfg["model"]["activation"] != cfg["model"]["activation"]:
             user_in = input("Pretrained model last layer activation differs from chosen activation.\nStill proceed (y) or exit (n)?\n [y/n]")
@@ -552,13 +615,12 @@ def init_model(cfg: dict[str, Any],
    
         return load_model(cfg["model"]["pre_model_name"], cfg["model"]["pre_cp"], root_dir), continue_training
 
-        
     # Case 3: Init new model
     else:
         if cfg["model"]["model_type"] == "density-model":
             return models.DensityModel(activation=cfg["model"]["activation"]), continue_training
         else:
-            raise TypeError(f"Model type {cfg['model']['model_type']} unknown.")
+            raise ValueError(f"Model type {cfg['model']['model_type']} unknown.")
 
 def init_loss(cfg: dict[str, Any]):
     """
@@ -576,14 +638,14 @@ def init_loss(cfg: dict[str, Any]):
 
     Raises
     ------
-    KeyError
+    ValueError
         If the loss function specified in cfg["loss"]["loss_fun"] is not supported.
     """
 
     if cfg["loss"]["loss_fun"] == "DensityCountLoss":
         return loss.DensityCountLoss(lambda_count=cfg["loss"]["loss_args"]["lbda_count"])
     else:
-        raise KeyError("Loss function unknown. Specify existing loss function in the config.")
+        raise ValueError("Loss function unknown. Specify existing loss function in the config.")
     
 def init_optimizer(model_params: Iterator[torch.nn.Parameter],
                    cfg: dict[str, Any],
@@ -614,7 +676,7 @@ def init_optimizer(model_params: Iterator[torch.nn.Parameter],
 
     Raises
     ------
-    KeyError
+    ValueError
         If the optimizer specified in cfg["training"]["optimizer"] is not supported.
     """
     # Init optimizer
@@ -625,7 +687,7 @@ def init_optimizer(model_params: Iterator[torch.nn.Parameter],
                 weight_decay=cfg["training"]["weight_decay"]
             )
     else:
-        raise KeyError("Optimizer unknown. Set in config one of \{AdamW\}.")
+        raise ValueError("Optimizer unknown. Set in config one of \{AdamW\}.")
     
     # Continue training: Load optimizer state dict
     if continue_training:

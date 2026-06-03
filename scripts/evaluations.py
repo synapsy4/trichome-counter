@@ -4,6 +4,7 @@ Evaluation functions
 
 import torch
 import numpy as np
+from tqdm.auto import tqdm
 from matplotlib import pyplot as plt
 
 
@@ -86,7 +87,7 @@ def evaluate_on_testset(model: torch.nn.Module,
 
     # Make inference on test set
     with torch.inference_mode():
-        for images, _, coords in dataloader:
+        for images, _, coords in tqdm(dataloader):
             
             images = images.to(device)       
             pred_densities = model(images) 

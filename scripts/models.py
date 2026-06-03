@@ -22,7 +22,7 @@ class DensityModel(nn.Module):
 
     Raises
     ------
-    TypeError
+    ValueError
         If the activation type is not implemented.
 
     """
@@ -50,7 +50,7 @@ class DensityModel(nn.Module):
         elif activation == "Sigmoid":
             self.activation = nn.Sigmoid()
         else: 
-            raise TypeError(f"Activation function type {activation} not known.")
+            raise ValueError(f"Activation function type {activation} not known.")
         
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
