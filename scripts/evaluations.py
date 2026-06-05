@@ -40,9 +40,9 @@ def predict_single_image(model: torch.nn.Module,
 
     # Make inference + directly convert to numpy
     with torch.inference_mode():
-        pred_density = model(img.unsqueeze(0)).squeeze().cpu().numpy()
-
-    pred_count = round(pred_density.sum())
+        pred = model(img.unsqueeze(0))
+        pred_density = pred["density"].squeeze().cpu().numpy()
+        pred_count = round(pred_density.sum()) if pred["count"] is None else pred["count"].squeeze().cpu().numpy()
 
     return pred_density, pred_count
     
@@ -90,7 +90,9 @@ def evaluate_on_testset(model: torch.nn.Module,
         for images, _, coords in tqdm(dataloader):
             
             images = images.to(device)       
-            pred_densities = model(images) 
+            pred = model(images) 
+            pred_densities = pred["density"]
+            pred_counts_batch = pred["count"]
 
             for i in range(images.size(0)):
 
@@ -99,8 +101,11 @@ def evaluate_on_testset(model: torch.nn.Module,
                 gt_counts.append(len(coords_i))
 
                 # Pred counts
-                pred_density = pred_densities[i].squeeze().cpu().numpy()
-                pred_counts.append(round(pred_density.sum()))
+                if pred_counts_batch is None:
+                    pred_density = pred_densities[i].squeeze().cpu().numpy()
+                    pred_counts.append(round(pred_density.sum()))
+                else:
+                    pred_counts.append(pred_counts_batch[i].squeeze().cpu().numpy())
         
     # Convert counts to numpy
     gt = np.array(gt_counts, dtype=np.float32)

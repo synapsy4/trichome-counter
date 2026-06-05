@@ -32,32 +32,33 @@ def train_one_epoch(model: torch.nn.Module,
     total_loss = 0.0
     total_mae = 0.0
 
-    for images, gt_density, _ in dataloader:
+    for images, gt_density, gt_coords in dataloader:
 
         # Move batch to GPU/CPU
         images = images.to(device)
         gt_density = gt_density.to(device)
+        gt_coords = tuple(c.to(device) for c in gt_coords)
 
         optimizer.zero_grad()
 
         # Forward pass
-        pred_density = model(images)
+        pred = model(images)
 
         # Compute loss
-        loss, _, _ = criterion(pred_density, gt_density)
+        loss_dict = criterion(pred_density=pred["density"], 
+                               gt_density=gt_density,
+                               gt_coords=gt_coords,
+                               pred_count=pred["count"])
+        loss = loss_dict["total_loss"]
+        loss_count = loss_dict["loss_count"]
 
         # Backpropagation
         loss.backward()
         optimizer.step()
 
+        # Monitor loss + count-level MAE
         total_loss += loss.item()
-
-        # Monitor count-level MAE
-        pred_count = pred_density.sum(dim=[1, 2, 3])
-        gt_count = gt_density.sum(dim=[1, 2, 3])
-
-        mae = torch.abs(pred_count - gt_count).mean()
-        total_mae += mae.item()
+        total_mae += loss_count.item()
 
     return (
         total_loss / len(dataloader),
@@ -69,7 +70,7 @@ def validate(model: torch.nn.Module,
              dataloader: torch.utils.data.DataLoader, 
              criterion: torch.nn.Module, 
              device: torch.device
-             ) -> tuple[float, float, list[torch.Tensor], list[torch.Tensor]]:
+             ) -> tuple[float, float]:
     """
     Evaluate a model on a validation or test dataset.
     
@@ -94,10 +95,6 @@ def validate(model: torch.nn.Module,
         Average loss over all batches in the dataset.
     avg_mae : float
         Average count-level mean absolute error (MAE) over all batches.
-    gt_counts : list of torch.Tensor
-        List of total counts per batch computed from ground truth density maps.
-    pred_counts : list of torch.Tensor
-        List of total counts per batch computed from predicted density maps.
     """
 
     model.eval()
@@ -105,40 +102,35 @@ def validate(model: torch.nn.Module,
     # Init return variables
     total_loss = 0.0
     total_mae = 0.0
-    gt_counts = []
-    pred_counts = []
 
     # Loop through batches
     with torch.inference_mode():
-        for images, gt_density, _ in dataloader:
+        for images, gt_density, gt_coords in dataloader:
 
+            # Move batch to GPU/CPU
             images = images.to(device)
             gt_density = gt_density.to(device)
+            gt_coords = tuple(c.to(device) for c in gt_coords)
 
             # Forward pass
-            pred_density = model(images)
+            pred = model(images)
 
             # Compute loss
-            loss, _, _ = criterion(pred_density, gt_density)
+            loss_dict = criterion(pred_density=pred["density"], 
+                        gt_density=gt_density,
+                        gt_coords=gt_coords,
+                        pred_count=pred["count"])
+            loss = loss_dict["total_loss"]
+            loss_count = loss_dict["loss_count"]
 
             total_loss += loss.item()
 
             # Monitor count-level MAE
-            pred_count = pred_density.sum(dim=[1, 2, 3])
-            gt_count = gt_density.sum(dim=[1, 2, 3])
-
-            mae = torch.abs(pred_count - gt_count).mean()
-            total_mae += mae.item()
-
-            # Update counts
-            gt_counts.extend(gt_count)
-            pred_counts.extend(pred_count)
+            total_mae += loss_count.item()
 
     return (
         total_loss / len(dataloader),
-        total_mae / len(dataloader),
-        gt_counts,
-        pred_counts
+        total_mae / len(dataloader)
     )
 
 def train(model: torch.nn.Module, 
@@ -205,10 +197,10 @@ def train(model: torch.nn.Module,
                                                 device=device)
         # Validation step
         val_dl = tqdm(val_dataloader, desc=f"Val epoch {epoch}", leave=False)
-        val_loss, val_mae, _, _ = validate(model=model,
-                                        dataloader=val_dl,
-                                        criterion=criterion,
-                                        device=device)
+        val_loss, val_mae = validate(model=model,
+                                     dataloader=val_dl,
+                                     criterion=criterion,
+                                     device=device)
         
         # Update best val epoch if lowest mae reached
         if best_epoch_val_mae is None or val_mae < best_epoch_val_mae:

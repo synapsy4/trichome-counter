@@ -372,7 +372,7 @@ def get_model_instance_path(model_dir: str | Path,
         model_instance_id = f"run_{best_run_id:03d}"
         model_instance_path = Path(model_dir) / model_instance_id
     else:
-        raise ValueError("Model cp must be one of \{'last','best'\}")
+        raise ValueError("Model cp must be one of {'last','best'}")
     return model_instance_path
 
 def load_overview(model_name: str,
@@ -507,7 +507,7 @@ def load_model(model_name: str,
         print("[WARNING] 'best' cp chosen. Should only be used for evaluation or transfer learning. Otherwise number of training epochs is logged incorrectly + optimizer has later state.")
         cp_file = "best_cp.pth"
     else:
-        raise ValueError("CP must be one of \{'last','best'\}")
+        raise ValueError("CP must be one of {'last','best'}")
 
     # Load config of model
     model_instance_path = get_model_instance_path(model_dir, cp)
@@ -518,12 +518,15 @@ def load_model(model_name: str,
     model_type = old_cfg["model"]["model_type"]
     if model_type == "density-model": 
         model = models.DensityModel(activation=old_cfg["model"]["activation"])
-        model_path = model_dir / cp_file
-        model.load_state_dict(torch.load(model_path))
-        print(f"[INFO] Loaded model from '{model_path}'.")
-        return model
+    elif model_type == "densitycount-model":
+        model = models.DensityCountModel(activation=old_cfg["model"]["activation"])
     else:
         raise ValueError(f"Model type {model_type} unknown. Update of load_model function required.")
+    
+    model_path = model_dir / cp_file
+    model.load_state_dict(torch.load(model_path))
+    print(f"[INFO] Loaded model from '{model_path}'.")
+    return model
     
 def init_model(cfg: dict[str, Any],
                cp: str = "last", 
@@ -619,6 +622,8 @@ def init_model(cfg: dict[str, Any],
     else:
         if cfg["model"]["model_type"] == "density-model":
             return models.DensityModel(activation=cfg["model"]["activation"]), continue_training
+        elif cfg["model"]["model_type"] == "densitycount-model":
+            return models.DensityCountModel(activation=cfg["model"]["activation"]), continue_training
         else:
             raise ValueError(f"Model type {cfg['model']['model_type']} unknown.")
 
@@ -644,6 +649,9 @@ def init_loss(cfg: dict[str, Any]):
 
     if cfg["loss"]["loss_fun"] == "DensityCountLoss":
         return loss.DensityCountLoss(lambda_count=cfg["loss"]["loss_args"]["lbda_count"])
+    elif cfg["loss"]["loss_fun"] == "BayesianCountLoss":
+        print("[WARNING] BayesianCount loss chosen: Target map + args are not used. Make also sure use_blend_maps is false in cfg (blend maps not used here).")
+        return loss.BayesianCountLoss(lambda_count=cfg["loss"]["loss_args"]["lbda_count"])
     else:
         raise ValueError("Loss function unknown. Specify existing loss function in the config.")
     
@@ -687,7 +695,7 @@ def init_optimizer(model_params: Iterator[torch.nn.Parameter],
                 weight_decay=cfg["training"]["weight_decay"]
             )
     else:
-        raise ValueError("Optimizer unknown. Set in config one of \{AdamW\}.")
+        raise ValueError("Optimizer unknown. Set in config one of {AdamW}.")
     
     # Continue training: Load optimizer state dict
     if continue_training:

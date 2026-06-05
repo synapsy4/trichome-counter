@@ -95,7 +95,7 @@ class TrichomeDataset(Dataset):
         Returns
         -------
         img : torch.Tensor
-            RGB image array, normalized to [0, 1].
+            RGB image array, normalized to [0, 1] and optionally further transformed..
         target_map : torch.Tensor
             Generated target map from the provided target_map_fun.
         coords : torch.Tensor
