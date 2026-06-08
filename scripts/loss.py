@@ -78,13 +78,13 @@ class DensityCountLoss(nn.Module):
                 "loss_count": loss_count.detach()}
     
 
-class BayesianCountLoss(nn.Module):
+class PointMassAllocationLoss(nn.Module):
     """
-    Combined Bayesian + Count loss.
+    Combined Likelihood + Count loss.
 
-    L_total = Bayesian(density_map, gt_coords) + lambda_count * L1(pred_count)
+    L_total = Likelihood(density_map, gt_coords) + lambda_count * L1(pred_count)
 
-    - Bayesian directly maximizes the likelihood that each gt count is 
+    - Likelihood directly maximizes the likelihood that each gt count is 
       "covered" by the predicted density
     - L1 count loss directly optimizes total object count
     """
@@ -131,7 +131,7 @@ class BayesianCountLoss(nn.Module):
         """
 
         # Bayesian loss
-        loss_density = self.bayesian_loss(pred_density, gt_coords)
+        loss_density = self.pma_loss(pred_density, gt_coords)
 
         # Compute total predicted counts & gt counts
         pred_count = pred_density.sum(dim=[1, 2, 3]) if pred_count is None else pred_count
@@ -151,17 +151,19 @@ class BayesianCountLoss(nn.Module):
                 "loss_density": loss_density.detach(), 
                 "loss_count": loss_count.detach()}
     
-    def bayesian_loss(self,
+    def pma_loss(self,
                       pred_density: torch.Tensor, 
                       gt_coords: tuple[torch.Tensor, ...], 
                       sigma: float = 8.0
-                      ) -> float:
+                      ) -> torch.Tensor:
         """
         point_annotations: list of (N_i, 2) tensors of trichome locations per image
         Computes loss directly from point locations, not GT density map.
         TODO: complete docstring
         """
-        loss = 0.0
+        loss = pred_density.new_tensor(0.0)
+        total_trichomes = 0
+
         for b, coords in enumerate(gt_coords):
             if len(coords) == 0:
                 continue
@@ -180,6 +182,7 @@ class BayesianCountLoss(nn.Module):
                 gauss = torch.exp(-((y_grid - y)**2 + (x_grid - x)**2) / (2 * sigma**2))
                 gauss = gauss / gauss.sum()
                 expected = (pred * gauss).sum()
-                loss += -torch.log(expected + 1e-6)
+                loss += torch.abs(expected - 1.0)
+                total_trichomes += 1
 
-        return loss / max(sum(len(p) for p in gt_coords), 1)
+        return loss / max(total_trichomes, 1)

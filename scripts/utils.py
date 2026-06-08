@@ -524,7 +524,7 @@ def load_model(model_name: str,
         raise ValueError(f"Model type {model_type} unknown. Update of load_model function required.")
     
     model_path = model_dir / cp_file
-    model.load_state_dict(torch.load(model_path))
+    model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     print(f"[INFO] Loaded model from '{model_path}'.")
     return model
     
@@ -649,9 +649,9 @@ def init_loss(cfg: dict[str, Any]):
 
     if cfg["loss"]["loss_fun"] == "DensityCountLoss":
         return loss.DensityCountLoss(lambda_count=cfg["loss"]["loss_args"]["lbda_count"])
-    elif cfg["loss"]["loss_fun"] == "BayesianCountLoss":
-        print("[WARNING] BayesianCount loss chosen: Target map + args are not used. Make also sure use_blend_maps is false in cfg (blend maps not used here).")
-        return loss.BayesianCountLoss(lambda_count=cfg["loss"]["loss_args"]["lbda_count"])
+    elif cfg["loss"]["loss_fun"] == "PointMassAllocationLoss":
+        print("[WARNING] PointMassAllocationLoss loss chosen: Target map + args are not used. Make also sure use_blend_maps is false in cfg (blend maps not used here).")
+        return loss.PointMassAllocationLoss(lambda_count=cfg["loss"]["loss_args"]["lbda_count"])
     else:
         raise ValueError("Loss function unknown. Specify existing loss function in the config.")
     
