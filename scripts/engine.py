@@ -6,9 +6,8 @@ from typing import Any
 
 from tqdm.auto import tqdm
 import torch
-from torch.utils.tensorboard import SummaryWriter
 
-from scripts import utils
+from scripts.logging import TrainingLogger
 
 def train_one_epoch(model: torch.nn.Module, 
                     dataloader: torch.utils.data.DataLoader, 
@@ -145,7 +144,7 @@ def train(model: torch.nn.Module,
     Train a model for a specified number of epochs and track performance metrics.
 
     Identifies the best-performing epoch based on validation MAE, and saves the 
-    best and last model checkpoints along with training metadata.
+    best and last model checkpoints each epoch along with training metadata.
 
     Parameters
     ----------
@@ -165,27 +164,13 @@ def train(model: torch.nn.Module,
         Device on which the model and data are processed ("cpu" or "cuda").
     """
 
-    # Init writers
-    model_name = cfg["model"]["model_name"]
-    writer = SummaryWriter(log_dir=f"tb_logs/{model_name}")   
-    overview = utils.load_overview(model_name, cfg["paths"]["models"])
-    epoch_offset = overview["epochs"]  if overview else 0
-    run_name = f"{model_name}_ep{epoch_offset+1}-{epoch_offset+cfg['training']['epochs']}" 
-    hparam_writer = SummaryWriter(log_dir=f"tb_logs/{model_name}/hparams/{run_name}")
+    # Init writer
+    logger = TrainingLogger(cfg=cfg)
     
-    # Things we want to save
-    best_epoch = 1
-    best_epoch_val_mae = None
-    best_model_cp = model.state_dict()
-    train_loss_list = []
-    train_mae_list = []
-    val_loss_list = []
-    val_mae_list = []
-
+    # Def progress bar
     n_epochs = cfg["training"]["epochs"]
-    
-    # Run training loop
     pbar = tqdm(range(1,n_epochs+1), desc="Epochs")
+    
     for epoch in pbar:
 
         # Train step
@@ -195,29 +180,25 @@ def train(model: torch.nn.Module,
                                                 optimizer=optimizer,
                                                 criterion=criterion,
                                                 device=device)
+        
         # Validation step
         val_dl = tqdm(val_dataloader, desc=f"Val epoch {epoch}", leave=False)
         val_loss, val_mae = validate(model=model,
                                      dataloader=val_dl,
                                      criterion=criterion,
                                      device=device)
-        
-        # Update best val epoch if lowest mae reached
-        if best_epoch_val_mae is None or val_mae < best_epoch_val_mae:
-            best_epoch = epoch
-            best_epoch_val_mae = val_mae
-            best_model_cp = model.state_dict()
-        
-        # Store losses and maes
-        train_loss_list.append(train_loss)
-        train_mae_list.append(train_mae)
-        val_loss_list.append(val_loss)
-        val_mae_list.append(val_mae)
 
-        # Add scalars to writer
-        global_step = epoch_offset + epoch
-        writer.add_scalars("Loss", {"train": train_loss, "val": val_loss}, global_step)
-        writer.add_scalars("MAE",  {"train": train_mae,  "val": val_mae},  global_step)
+        # Save epoch logs
+        metrics = {
+            "train_loss": train_loss,
+            "train_mae": train_mae,
+            "val_loss": val_loss,
+            "val_mae": val_mae
+        }
+        logger.log_epoch(epoch=epoch,
+                         metrics=metrics,
+                         model=model,
+                         optimizer=optimizer)
 
         # Print status
         pbar.set_postfix({
@@ -225,31 +206,5 @@ def train(model: torch.nn.Module,
             "val-loss": f"{val_loss:.2f}", "val-mae": f"{val_mae:.2f}",
         })
 
-    # Write metric dict
-    metrics = {
-        "best_epoch": best_epoch,
-        "best_epoch_val_mae": best_epoch_val_mae,
-        "train_loss_list": train_loss_list,
-        "train_mae_list": train_mae_list,
-        "val_loss_list": val_loss_list,
-        "val_mae_list": val_mae_list
-        }
-
-    # Add hparams to writer
-    if overview:
-        global_best_mae = min(overview["best_val_mae"], round(best_epoch_val_mae, 3))
-        global_best_epoch = overview["best_epoch"] if global_best_mae < best_epoch_val_mae else epoch_offset + best_epoch
-    else:
-        global_best_mae = round(best_epoch_val_mae, 3)
-        global_best_epoch = best_epoch
-    hparam_writer.add_hparams(utils.flatten_dict(cfg), {
-        "hparam/best_val_mae": global_best_mae,
-        "hparam/best_epoch":   global_best_epoch,
-    })
-    
-    # Save model
-    utils.save_model(last_cp=model.state_dict(),
-                     optim_cp=optimizer.state_dict(),
-                     best_cp=best_model_cp,
-                     cfg=cfg,
-                     metrics=metrics)
+    # Close tb summary writers
+    logger.close()

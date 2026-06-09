@@ -1,7 +1,7 @@
 training:
   batch_size: 16                           # Tran/val/test batch size
-  lr: 1.0e-6                                # Learning rate
-  epochs: 4                                 # Training epochs
+  lr: 1.0e-5                                # Learning rate
+  epochs: 2                                 # Training epochs
   weight_decay: 1.0e-4                      # Weight decay
   optimizer: "AdamW"                        # Optimizer
 
@@ -17,7 +17,7 @@ target_map:
   use_blend_maps: true                     # If true, pregenerated target maps are used
 
 model:
-  model_name: "model1_density10pretrain"             # Model name
+  model_name: "model1_densitycount10pretrain"             # Model name
   model_type: "density-model"               # Type of model
   activation: "ReLUTanh"                    # Last layer activation
   # Transfer learning (ignored when resuming an existing model_name or pre_model_name = null)
@@ -35,3 +35,4 @@ paths:
   test_data: "data/preprocessed/test"       # Path to testing data
   models: "models"                          # Path to models
   outputs: "outputs"                        # Path to eval outputs
+  tb_logs: "tb_logs"

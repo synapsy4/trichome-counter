@@ -69,7 +69,6 @@ def get_random_data_paths(seed: int = None
     return image_path_raw, coord_path_raw, image_path_pre, coord_path_pre
 
 
-
 def load_raw_image_data(image_path_raw: str | Path,
                         coord_path_raw: str | Path
                         ) -> tuple[np.ndarray, float, float, float, float, np.ndarray]:
@@ -117,7 +116,6 @@ def load_raw_image_data(image_path_raw: str | Path,
     rect_y -= 1
 
     return img_raw, rect_x, rect_y, rect_w, rect_h, coords_raw
-
 
 
 def load_preprocessed_image_data(image_path_pre: str | Path,
@@ -185,149 +183,6 @@ def collate_fn(
     return images, target_maps, coords  # coords = list of tensors
 
 
-def save_model(last_cp: OrderedDict[str, torch.Tensor],
-               optim_cp: OrderedDict[str, torch.Tensor],
-               best_cp: OrderedDict[str, torch.Tensor],
-               cfg: dict[str, Any], 
-               metrics: dict[str, Any],
-               ) -> None:
-    """
-    Saves a PyTorch model and its metadata.
-
-    Parameters
-    ----------
-        last_cp : OrderedDict
-            State dict of model from last epoch.
-        optim_cp : OrderedDict
-            State dict of optimizer from last epoch.
-        best_cp : OrderedDict
-            State dict of model at epoch with lowest validation mae.
-        cfg : dict
-            Config dict.
-        metircs : dict
-            Dictionary with results.
-    """
-    # Create target directory
-    root_dir = Path(cfg["paths"]["models"])
-    root_dir.mkdir(parents=True,
-                            exist_ok=True)
-
-    # Create model save dir
-    model_name = cfg["model"]["model_name"]
-    model_dir = root_dir / Path(model_name)
-    model_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Create model instance save path
-    model_list = [p.name for p in model_dir.iterdir() if p.is_dir()]
-    idx_list = [int(run[-3:]) for run in model_list] if len(model_list)>0 else [0]
-    run_idx = max(idx_list) + 1
-    model_instance_id = f"run_{run_idx:03d}"
-    model_instance_dir = Path(model_dir) / model_instance_id
-    model_instance_dir.mkdir(parents=True,
-                            exist_ok=True)
-    
-    # Flag if new global best model cp is found
-    new_best_model = True
-    
-    # Define overview and epoch log paths
-    overview_path = model_dir / "overview.json"
-    history_path = model_dir / "history.jsonl"
-
-    # First run: Create new overview + history files
-    if run_idx == 1:
-        # Create overview dict
-        overview = {
-            "model_name": cfg["model"]["model_name"],
-            "epochs": cfg["training"]["epochs"],
-            "best_epoch": metrics["best_epoch"],
-            "training_runs": 1,
-            "best_run": 1,
-            "best_val_mae": round(metrics["best_epoch_val_mae"], 3),
-        }
-
-        # Create history file
-        with open(history_path, "w") as f:
-            # Write epoch logs
-            for epoch_idx in range(cfg["training"]["epochs"]):
-                epoch_metrics = {
-                    "epoch": epoch_idx + 1,
-                    "train_loss": round(metrics["train_loss_list"][epoch_idx], 3),
-                    "val_loss": round(metrics["val_loss_list"][epoch_idx], 3),
-                    "train_mae": round(metrics["train_mae_list"][epoch_idx], 3),
-                    "val_mae": round(metrics["val_mae_list"][epoch_idx], 3),
-                    "lr": cfg["training"]["lr"],
-                    "wd": cfg["training"]["weight_decay"],
-                    "loss_args": cfg["loss"]["loss_args"],
-                    "target_map_args": cfg["target_map"]["target_map_args"],
-                }
-                f.write(json.dumps(epoch_metrics) + "\n")
-
-    # Not first run: Extend overview + history files
-    else:
-        # Load overview
-        with open(overview_path, "r") as f:
-            overview = json.load(f)
-        
-        # Get previous epoch count
-        n_prev_epochs = overview["epochs"]
-
-        # Update overview stats
-        overview["epochs"] += cfg["training"]["epochs"]
-        overview["training_runs"] += 1
-
-        # Update best model info
-        if metrics["best_epoch_val_mae"] < overview["best_val_mae"]:
-            overview["best_epoch"] = n_prev_epochs + metrics["best_epoch"]
-            overview["best_val_mae"] = round(metrics["best_epoch_val_mae"], 3)
-            overview["best_run"] = run_idx
-        else:
-            new_best_model = False
-
-        # Append new epoch logs
-        with open(history_path, "a") as f:
-            for epoch_idx in range(cfg["training"]["epochs"]):
-                epoch_metrics = {
-                    "epoch": n_prev_epochs + epoch_idx + 1,
-                    "train_loss": round(metrics["train_loss_list"][epoch_idx], 3),
-                    "val_loss": round(metrics["val_loss_list"][epoch_idx], 3),
-                    "train_mae": round(metrics["train_mae_list"][epoch_idx], 3),
-                    "val_mae": round(metrics["val_mae_list"][epoch_idx], 3),
-                    "lr": cfg["training"]["lr"],
-                    "wd": cfg["training"]["weight_decay"],
-                    "loss_args": cfg["loss"]["loss_args"],
-                    "target_map_args": cfg["target_map"]["target_map_args"],
-                }
-                f.write(json.dumps(epoch_metrics) + "\n")
-
-    # Save overview
-    with open(overview_path, "w") as f:
-        json.dump(overview, f, indent=4)
-
-    # Save config
-    cfg_save_path = model_instance_dir / "config.yaml"
-    print(f"[INFO] Saving config to '{cfg_save_path}'.")
-    with open(cfg_save_path, "w") as f:
-        yaml.dump(cfg, f)
-
-    # Save last model state dict
-    cp_save_path = model_dir / "last_cp.pth"
-    print(f"[INFO] Saving last model cp to '{cp_save_path}'.")
-    torch.save(obj=last_cp,
-                f=cp_save_path)
-    
-    # Save optimizer state dict
-    cp_save_path = model_dir / "optim_cp.pth"
-    print(f"[INFO] Saving optimizer cp to '{cp_save_path}'.")
-    torch.save(obj=optim_cp,
-                f=cp_save_path)
-
-    # Save best model state dict if new best model found
-    if new_best_model:
-        cp_save_path = model_dir / "best_cp.pth"
-        print(f"[INFO] Saving best model cp to '{cp_save_path}'.")
-        torch.save(obj=best_cp,
-                    f=cp_save_path)
-    
 def get_model_instance_path(model_dir: str | Path,
                             cp: str = "last"
                             ) -> Path:
@@ -337,74 +192,41 @@ def get_model_instance_path(model_dir: str | Path,
     Parameters
     ----------
     model_dir : str or Path
-        Path to the model directory containing individual run
-        subdirectories (e.g. run_001, run_002, ...).
+        Path to the model directory.
     cp : {'last', 'best'}, optional
-        Which run to resolve. 'last' selects the run with the highest
-        index, 'best' selects the run recorded in overview.json.
+        Which run to resolve. 'last' selects the last run, 
+        'best' selects the best run recorded in overview.json.
         Defaults to 'last'.
 
     Returns
     -------
     model_instance_path : Path
-        Path to the resolved run directory (e.g. model_dir/run_003).
+        Path to the resolved run directory.
 
     Raises
     ------
     ValueError
         If cp is not one of {'last', 'best'}.
     """
+
     model_dir = Path(model_dir)
+    model_list = [p.name for p in model_dir.iterdir() if p.is_dir()]
 
     # Load last training run path
     if cp == "last":
-        model_list = [p.name for p in model_dir.iterdir() if p.is_dir()]
-        idx_list = [int(run[-3:]) for run in model_list]
-        model_idx = max(idx_list)
-        model_instance_id = f"run_{model_idx:03d}"
-        model_instance_path = Path(model_dir) / model_instance_id
+        model_instance_path = Path(model_dir) / model_list[-1]
     # Else load path with best cp
     elif cp == "best":
         overview_path = Path(model_dir) / "overview.json"
         with open(overview_path, "r") as f:
             overview = json.load(f) 
-        best_run_id = overview["best_run"]
-        model_instance_id = f"run_{best_run_id:03d}"
-        model_instance_path = Path(model_dir) / model_instance_id
+        best_run_idx = overview["best_run"] - 1
+        model_instance_path = Path(model_dir) / model_list[best_run_idx]
     else:
         raise ValueError("Model cp must be one of {'last','best'}")
     return model_instance_path
 
-def load_overview(model_name: str,
-                  root: Path | str = "models"
-                  ) -> dict | None:
-    """
-    Load the overview JSON for a given model.
 
-    Parameters
-    ----------
-    model_name : str
-        Name of the model, used as the subdirectory name under root.
-    root : Path or str, optional
-        Root directory containing model subdirectories.
-        Defaults to 'models'.
-
-    Returns
-    -------
-    overview : dict
-        Parsed contents of overview.json, or None if the file does
-        not exist.
-    """
-    model_dir = Path(root) / model_name
-    overview_path = model_dir / "overview.json"
-
-    # Load overview
-    if overview_path.exists():
-        with open(overview_path, "r") as f:
-            return json.load(f)
-    else:
-        return None
-    
 def flatten_dict(d: dict[str, Any], 
                  parent_key: str = ""
                  ) -> dict[str, Any]:
