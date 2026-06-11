@@ -5,7 +5,6 @@ Evaluation functions
 import torch
 import numpy as np
 from tqdm.auto import tqdm
-from matplotlib import pyplot as plt
 
 
 def predict_single_image(model: torch.nn.Module,

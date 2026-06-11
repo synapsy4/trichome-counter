@@ -351,8 +351,7 @@ def load_model(model_name: str,
     return model
     
 def init_model(cfg: dict[str, Any],
-               cp: str = "last", 
-               root_dir: str = "models"
+               cp: str = "last"
                ) -> tuple[torch.nn.Module, bool]:
     """
     Initialize a new model or load an existing model
@@ -369,8 +368,6 @@ def init_model(cfg: dict[str, Any],
     cp : {"last", "best"}, optional
         Specifies which checkpoint to load when initializing an existing model.
         Default is "last".
-    root_dir : str, optional
-        Root directory where models are stored. Default is "models".
     
     Returns
     -------
@@ -388,7 +385,9 @@ def init_model(cfg: dict[str, Any],
     ValueError
         If pretrained model does not exist.
     """
+    
     continue_training = False
+    root_dir = cfg["paths"]["models"]
 
     # Get list of models from the root_dir (default: "models")
     current_dir = Path.cwd()
