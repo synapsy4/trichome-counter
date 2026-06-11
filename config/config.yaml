@@ -1,5 +1,6 @@
 training:
   batch_size: 16                           # Tran/val/test batch size
+  accu_steps : 1                            # gradient accumulation steps
   lr: 1.0e-5                                # Learning rate
   epochs: 2                                 # Training epochs
   weight_decay: 1.0e-4                      # Weight decay

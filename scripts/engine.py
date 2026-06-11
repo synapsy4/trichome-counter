@@ -13,10 +13,15 @@ def train_one_epoch(model: torch.nn.Module,
                     dataloader: torch.utils.data.DataLoader, 
                     optimizer: torch.optim.Optimizer, 
                     criterion: torch.nn.Module, 
-                    device: torch.device
+                    device: torch.device,
+                    accumulation_steps: int = 1
                     ) -> tuple[float, float]:
     """
     Train model for one epoch.
+    TODO: Update docstring
+
+    accumulation_steps : int, optional
+        Steps for gradient accumulation. Default is 1 (= no acumulation)
 
     Returns
     -------
@@ -31,14 +36,13 @@ def train_one_epoch(model: torch.nn.Module,
     total_loss = 0.0
     total_mae = 0.0
 
-    for images, gt_density, gt_coords in dataloader:
+    for i, batch in enumerate(dataloader):
 
         # Move batch to GPU/CPU
+        images, gt_density, gt_coords = batch
         images = images.to(device)
         gt_density = gt_density.to(device)
         gt_coords = tuple(c.to(device) for c in gt_coords)
-
-        optimizer.zero_grad()
 
         # Forward pass
         pred = model(images)
@@ -52,12 +56,21 @@ def train_one_epoch(model: torch.nn.Module,
         loss_count = loss_dict["loss_count"]
 
         # Backpropagation
-        loss.backward()
-        optimizer.step()
+        (loss / accumulation_steps).backward()
+
+        # Update wnbs
+        if (i + 1) % accumulation_steps == 0:
+            optimizer.step()
+            optimizer.zero_grad()
 
         # Monitor loss + count-level MAE
         total_loss += loss.item()
         total_mae += loss_count.item()
+
+    # Handle leftover gradients if dataset size isn't divisible by accumulation_steps
+    if (i + 1) % accumulation_steps != 0:
+        optimizer.step()
+        optimizer.zero_grad()
 
     return (
         total_loss / len(dataloader),
@@ -166,6 +179,9 @@ def train(model: torch.nn.Module,
 
     # Init writer
     logger = TrainingLogger(cfg=cfg)
+
+    # Get steps for gradient accumulation (set to 1 if non existent)
+    accumulation_steps = cfg["training"].get("accu_steps", 1)
     
     # Def progress bar
     n_epochs = cfg["training"]["epochs"]
@@ -179,7 +195,8 @@ def train(model: torch.nn.Module,
                                                 dataloader=train_dl,
                                                 optimizer=optimizer,
                                                 criterion=criterion,
-                                                device=device)
+                                                device=device,
+                                                accumulation_steps=accumulation_steps)
         
         # Validation step
         val_dl = tqdm(val_dataloader, desc=f"Val epoch {epoch}", leave=False)
