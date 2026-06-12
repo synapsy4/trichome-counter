@@ -20,6 +20,12 @@ if __name__ == "__main__":
     # Init model
     model, continue_training = init_model(cfg=cfg) 
 
+    # Get device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Send model to device
+    model.to(device)
+
     # Init loss
     criterion = init_loss(cfg=cfg)
 
@@ -28,11 +34,6 @@ if __name__ == "__main__":
                                cfg=cfg,
                                continue_training=continue_training)
 
-    # Get device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    # Send model to device
-    model.to(device)
 
     # Train model
     train(model=model,

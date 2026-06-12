@@ -35,7 +35,8 @@ def predict_single_image(model: torch.nn.Module,
     model.eval()
     
     # Make sure img + model are on the same device
-    model.to(device), img.to(device)
+    model.to(device)
+    img = img.to(device)
 
     # Make inference + directly convert to numpy
     with torch.inference_mode():
