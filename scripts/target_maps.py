@@ -167,17 +167,17 @@ def generate_density_map_adaptive(coords: torch.Tensor,
 
 
 
-    def generate_empty_map(coords: torch.Tensor, 
-                         H: int, 
-                         W: int 
-                         ) -> torch.Tensor:
-        """
-        TODO: Add docstring.
-        """
-        # Ensure device consistency
-        device = coords.device
+def generate_empty_map(coords: torch.Tensor, 
+                        H: int, 
+                        W: int 
+                        ) -> torch.Tensor:
+    """
+    TODO: Add docstring.
+    """
+    # Ensure device consistency
+    device = coords.device
 
-        # Initialize empty density map
-        density = torch.zeros((H, W), dtype=torch.float32, device=device)
-        
-        return density
+    # Initialize empty density map
+    density = torch.zeros((H, W), dtype=torch.float32, device=device)
+    
+    return density
