@@ -14,7 +14,7 @@ from torch.utils.data import Dataset
 
 import scripts.data_transformations as transforms
 from scripts.utils import collate_fn
-from scripts.target_maps import generate_density_map, generate_density_map_adaptive
+from scripts.target_maps import generate_density_map, generate_density_map_adaptive, generate_empty_map
 
 
 
@@ -170,6 +170,8 @@ def get_dataloader(split: str,
         tmf = generate_density_map
     elif cfg["target_map"]["target_map_fun"] == "generate_density_map_adaptive":
         tmf = generate_density_map_adaptive
+    elif cfg["target_map"]["target_map_fun"] == "generate_empty_map":
+        tmf = generate_empty_map
     else:
         raise ValueError("Unknown target map function. Specify existing target map function in config file.")
     

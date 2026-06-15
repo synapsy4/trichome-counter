@@ -164,3 +164,20 @@ def generate_density_map_adaptive(coords: torch.Tensor,
         density[y0:y1, x0:x1] += g
 
     return density
+
+
+
+    def generate_empty_map(coords: torch.Tensor, 
+                         H: int, 
+                         W: int 
+                         ) -> torch.Tensor:
+        """
+        TODO: Add docstring.
+        """
+        # Ensure device consistency
+        device = coords.device
+
+        # Initialize empty density map
+        density = torch.zeros((H, W), dtype=torch.float32, device=device)
+        
+        return density
