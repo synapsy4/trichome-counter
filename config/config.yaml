@@ -7,18 +7,18 @@ training:
   optimizer: "AdamW"                        # Optimizer
 
 loss:
-  loss_fun: "PointMassAllocationLoss"              # Loss function
+  loss_fun: "BayesianDensityCountLoss"              # Loss function
   loss_args: 
     lbda_count: 1                         # Count loss weight
 
 target_map:
   target_map_fun: "generate_empty_map"    # Function id to create target map
-  target_map_args: 
-    sigma: null                               # Target density map standard deviation
+  target_map_args: {}
+    #sigma: 10                              # Target density map standard deviation
   use_blend_maps: false                     # If true, pregenerated target maps are used
 
 model:
-  model_name: "model0_densityPMA"             # Model name
+  model_name: "model0_densityBDC"             # Model name
   model_type: "density-model"               # Type of model
   activation: "ReLUTanh"                    # Last layer activation
   # Transfer learning (ignored when resuming an existing model_name or pre_model_name = null)

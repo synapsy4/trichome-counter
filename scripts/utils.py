@@ -473,6 +473,9 @@ def init_loss(cfg: dict[str, Any]):
     elif cfg["loss"]["loss_fun"] == "PointMassAllocationLoss":
         print("[WARNING] PointMassAllocationLoss loss chosen: Target map + args are not used. Make also sure use_blend_maps is false in cfg (blend maps not used here).")
         return loss.PointMassAllocationLoss(lambda_count=cfg["loss"]["loss_args"]["lbda_count"])
+    elif cfg["loss"]["loss_fun"] == "BayesianDensityCountLoss":
+        print("[WARNING] BayesianDensityCountLoss loss chosen: Target map + args are not used. Make also sure use_blend_maps is false in cfg (blend maps not used here).")
+        return loss.BayesianDensityCountLoss(lambda_count=cfg["loss"]["loss_args"]["lbda_count"])    
     else:
         raise ValueError("Loss function unknown. Specify existing loss function in the config.")
     
