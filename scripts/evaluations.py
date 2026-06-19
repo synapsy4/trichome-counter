@@ -5,6 +5,7 @@ Evaluation functions
 import torch
 import numpy as np
 from tqdm.auto import tqdm
+from scipy import stats
 
 
 def predict_single_image(model: torch.nn.Module,
@@ -112,6 +113,10 @@ def evaluate_on_testset(model: torch.nn.Module,
     pred = np.array(pred_counts, dtype=np.float32)
 
 
+    # Calculate correlations
+    r, p_value = stats.pearsonr(gt, pred) # Pearson r + p-value
+    r2 = r ** 2 # R^2
+
     # Make results dict
     results = {
         # Per-sample arrays
@@ -121,6 +126,10 @@ def evaluate_on_testset(model: torch.nn.Module,
         "mae_sum": float(np.mean(np.abs(pred - gt))),
         "rmse_sum": float(np.sqrt(np.mean((pred - gt) ** 2))),
         "me_sum": float(np.mean(pred - gt)),
+        # Correlation
+        "pearson_r": r,
+        "p_value": p_value,
+        "R_2": r2
     }
 
     return results

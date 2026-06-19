@@ -23,10 +23,10 @@ from scripts import loss
 def get_random_data_paths(seed: int = None
                           ) -> tuple[Path, Path, Path, Path]:
     """
-    Get random file paths for raw and preprocessed image and coordinate data.
+    Get random file paths for raw and processed image and coordinate data.
 
     Randomly selects a data split (train/val/test) and a file from that split,
-    then returns paths to both the raw and preprocessed versions of the data.
+    then returns paths to both the raw and processed versions of the data.
 
     Parameters
     ----------
@@ -40,18 +40,18 @@ def get_random_data_paths(seed: int = None
     coord_path_raw : Path
         Path to the raw coordinate .mat file.
     image_path_pre : Path
-        Path to the preprocessed JPEG image file.
+        Path to the processed JPEG image file.
     coord_path_pre : Path
-        Path to the preprocessed coordinate .npy file.
+        Path to the processed coordinate .npy file.
     """
     # Use seed if given
     if seed is not None:
         random.seed(seed)
 
     # Choose processed image and coord path randomly
-    data_paths = [Path("data/preprocessed/train"),
-                  Path("data/preprocessed/val"),
-                  Path("data/preprocessed/test")]
+    data_paths = [Path("data/processed/train"),
+                  Path("data/processed/val"),
+                  Path("data/processed/test")]
     data_path = random.choice(data_paths) 
     img_path = data_path / "images"
     coord_path = data_path / "coords"
@@ -118,23 +118,23 @@ def load_raw_image_data(image_path_raw: str | Path,
     return img_raw, rect_x, rect_y, rect_w, rect_h, coords_raw
 
 
-def load_preprocessed_image_data(image_path_pre: str | Path,
+def load_processed_image_data(image_path_pre: str | Path,
                                  coord_path_pre: str | Path
                                  ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Load preprocessed image and coordinate data from file paths.
+    Load processed image and coordinate data from file paths.
     
     Parameters
     ----------
     image_path_pre : str or Path
-        Path to the preprocessed image file.
+        Path to the processed image file.
     coord_path_pre : str or Path
-        Path to the .npy file containing preprocessed coordinate data.
+        Path to the .npy file containing processed coordinate data.
     
     Returns
     -------
     img_pre : numpy.ndarray
-        Preprocessed image in RGB format (H, W, 3).
+        processed image in RGB format (H, W, 3).
     coords_pre : numpy.ndarray
         Array of image (x,y)-coordinates with shape (N, 2).
     """
@@ -473,9 +473,6 @@ def init_loss(cfg: dict[str, Any]):
     elif cfg["loss"]["loss_fun"] == "PointMassAllocationLoss":
         print("[WARNING] PointMassAllocationLoss loss chosen: Target map + args are not used. Make also sure use_blend_maps is false in cfg (blend maps not used here).")
         return loss.PointMassAllocationLoss(lambda_count=cfg["loss"]["loss_args"]["lbda_count"])
-    elif cfg["loss"]["loss_fun"] == "BayesianDensityCountLoss":
-        print("[WARNING] BayesianDensityCountLoss loss chosen: Target map + args are not used. Make also sure use_blend_maps is false in cfg (blend maps not used here).")
-        return loss.BayesianDensityCountLoss(lambda_count=cfg["loss"]["loss_args"]["lbda_count"])    
     else:
         raise ValueError("Loss function unknown. Specify existing loss function in the config.")
     

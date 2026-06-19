@@ -14,6 +14,44 @@ Because annotations are sparse and noisy rather than full segmentation masks, th
 
 ---
 
+## Results
+
+Current best model: `model0_density10` (U-Net, Gaussian density targets, σ=10)
+
+| Metric | Value |
+|---|---|
+| MAE | 14.33 |
+| Mean Error (bias) | +3.38 |
+| Pearson r | 0.98 (R² = 0.96) |
+
+### Predicted vs. ground truth count (n=89 test images)
+
+<img src="outputs/model0_density10/showcase/error_distribution_cp_best.png" width="80%">
+
+### Example prediction (GT count = 67 | Pred count = 82)
+
+<div style="width:80%; text-align:right;">
+    <img src="outputs/model0_density10/showcase/example1_raw.png" width="100%">
+    <em>Raw sample</em>
+</div>
+
+
+<div style="width:80%; text-align:right;">
+    <br>
+    <img src="outputs/model0_density10/showcase/example1_gt.png" width="100%">
+    <em>GT density</em>
+</div>
+
+
+<div style="width:80%; text-align:right;">
+    <br>
+    <img src="outputs/model0_density10/showcase/example1_pred.png" width="100%">
+    <em>Predicted density</em>
+</div>
+
+
+---
+
 ## Challenges
 
 ### 1. High-resolution images with tiny targets
@@ -65,7 +103,7 @@ TrichomeCounter/
 │
 ├── data/
 │   ├── raw/                # Raw dataset
-│   └── preprocessed/       # Preprocessed dataset
+│   └── processed/       # processed dataset
 │       ├── train/
 │       ├── val/
 │       └── test/
@@ -151,7 +189,7 @@ from scripts.data_setup import preprocess_dataset
 
 preprocess_dataset(
     raw_root=Path("data/raw"),
-    out_root=Path("data/preprocessed"),
+    out_root=Path("data/processed"),
 )
 ```
 
@@ -216,24 +254,10 @@ Planned experiments:
 
 ---
 
-## Results
-
-Results and visualizations will be added once experiments stabilize.
-
-Planned additions:
-- quantitative evaluation metrics
-- prediction visualizations
-- density maps
-- qualitative comparisons
-- error analysis
-
----
-
 ## Future Work
 
 - Improve robustness to annotation noise
 - Explore density-estimation approaches
-- Add experiment tracking
 - Maybe: Create small segmentation subset to finetune best model
 
 ---

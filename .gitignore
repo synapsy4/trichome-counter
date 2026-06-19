@@ -7,9 +7,8 @@ __pycache__/
 *.so
 *.egg
 *.egg-info/
-dist/
-build/
 data/
 models/
 tb_logs/
-colab_runner.ipynb
+label_generator.py
+temp.ipynb

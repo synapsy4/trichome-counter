@@ -210,7 +210,7 @@ def process_single_image(
     return new_img, coords, (rect_w, rect_h)
 
 
-def preprocess_dataset(raw_root: Path, 
+def process_dataset(raw_root: Path, 
                        out_root: Path
                        ) -> None:
     """

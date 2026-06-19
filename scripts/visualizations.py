@@ -108,8 +108,16 @@ def plot_density_map(density: torch.Tensor,
         # Plot image
         ax.imshow(img_np)
         
+    if isinstance(density, torch.Tensor):
+        density_np = density.numpy()
+    else:
+        density_np = density
+    
+    if density_np.shape[0] == 1:
+        density_np = np.transpose(density_np, (1, 2, 0))
+
     # Plot/overlay density map with transparency
-    ax.imshow(density, cmap=cmap, alpha=alpha)
+    ax.imshow(density_np, cmap=cmap, alpha=alpha)
     
     # Set title and turn off axis
     ax.set_title(title)
@@ -469,7 +477,8 @@ def plot_error_distribution(eval_results: dict,
     if save_fig:
         save_path = Path(cfg["paths"]["outputs"]) / cfg["model"]["model_name"]
         save_path.mkdir(parents=True, exist_ok=True)
-        save_path = save_path / f"error_distribution_cp_{cp}.png"
+        #save_path = save_path / f"error_distribution_cp_{cp}.png"
+        save_path = save_path / f"error_distribution_cp_{cp}.pdf"
         fig.savefig(
             save_path,
             dpi=150,

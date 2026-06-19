@@ -1,13 +1,13 @@
 training:
   batch_size: 8                           # Tran/val/test batch size
   accu_steps : 4                            # gradient accumulation steps
-  lr: 1.0e-4                                # Learning rate
+  lr: 1.0e-6                                # Learning rate
   epochs: 10                                 # Training epochs
   weight_decay: 1.0e-4                      # Weight decay
   optimizer: "AdamW"                        # Optimizer
 
 loss:
-  loss_fun: "BayesianDensityCountLoss"              # Loss function
+  loss_fun: "PointMassAllocationLoss"    # Loss function
   loss_args: 
     lbda_count: 1                         # Count loss weight
 
@@ -18,7 +18,7 @@ target_map:
   use_blend_maps: false                     # If true, pregenerated target maps are used
 
 model:
-  model_name: "model0_densityBDC"             # Model name
+  model_name: "model0_densityPMA"             # Model name
   model_type: "density-model"               # Type of model
   activation: "ReLUTanh"                    # Last layer activation
   # Transfer learning (ignored when resuming an existing model_name or pre_model_name = null)
@@ -31,9 +31,9 @@ transforms:
   imagenet_normalization: false              # false for models not pretrained on ImageNet
 
 paths:
-  train_data: "data/preprocessed/train"     # Path to training data
-  val_data: "data/preprocessed/val"         # Path to validation data
-  test_data: "data/preprocessed/test"       # Path to testing data
+  train_data: "data/processed/train"     # Path to training data
+  val_data: "data/processed/val"         # Path to validation data
+  test_data: "data/processed/test"       # Path to testing data
   models: "models"                          # Path to models
   outputs: "outputs"                        # Path to eval outputs
   tb_logs: "tb_logs"
