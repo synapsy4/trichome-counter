@@ -26,7 +26,9 @@ Current best model: `model0_density10` (U-Net, Gaussian density targets, σ=10)
 
 ### Predicted vs. ground truth count (n=89 test images)
 
-<img src="outputs/model0_density10/showcase/error_distribution_cp_best.png" width="80%">
+<div style="width:80%">
+    <img src="outputs/model0_density10/showcase/error_distribution_cp_best.png" width="100%">
+</div>
 
 ### Example prediction (GT count = 67 | Pred count = 82)
 
