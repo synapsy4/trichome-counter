@@ -2,6 +2,7 @@
 Class for creating custom PyTorch dataset and dataloader setup.
 """
 
+import os
 from pathlib import Path
 from typing import Callable, Any
 
@@ -196,10 +197,13 @@ def get_dataloader(split: str,
                         **cfg["target_map"]["target_map_args"])
     
     # Create dataloader
+    gpu_available = True if torch.cuda.is_available() else False
     dataloader = DataLoader(dataset=ds,
                     batch_size=cfg["training"]["batch_size"],
                     shuffle=shuffle,
-                    collate_fn=collate_fn)
+                    collate_fn=collate_fn,
+                    num_workers=os.cpu_count() if gpu_available else 0,
+                    pin_memory=gpu_available)
 
     return dataloader
 
