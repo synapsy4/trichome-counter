@@ -29,11 +29,3 @@ transforms:
   short_side: 512                           # Short side len of transformed image
   brightness: 0.2                           # Random brightness scale parameter
   imagenet_normalization: false              # false for models not pretrained on ImageNet
-
-paths:
-  train_data: "data/processed/train"     # Path to training data
-  val_data: "data/processed/val"         # Path to validation data
-  test_data: "data/processed/test"       # Path to testing data
-  models: "models"                          # Path to models
-  outputs: "outputs"                        # Path to eval outputs
-  tb_logs: "tb_logs"

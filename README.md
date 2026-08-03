@@ -97,41 +97,48 @@ Instead, annotations are approximate coordinates obtained from manual clicks nea
 
 ## Project Structure
 
-```text
-TrichomeCounter/
-│
-├── config/
-│   └── config.yaml         # Hyperparameter configuration
-│
-├── data/
-│   ├── raw/                # Raw dataset
-│   └── processed/       # processed dataset
-│       ├── train/
-│       ├── val/
-│       └── test/
-│
-├── models/                 # Saved checkpoints
-├── outputs/                # Metrics, plots, predictions
-│
-├── scripts/
-│   ├── data_setup.py
-│   ├── data_transformations.py
-│   ├── data.py
-│   ├── engine.py
-│   ├── evaluations.py
-│   ├── loss.py
-│   ├── models.py
-│   ├── target_maps.py
-│   ├── utils.py
-│   └── visualizations.py
-│
-├── tb_logs/                # Tensorboard event logs
-│
-├── exploration.ipynb       # Data exploration and experiments
-├── requirements.txt
-├── train.py                # Training entry point
-├── test.py                 # Evaluation entry point
-└── README.md
+```text 
+TrichomeCounter/ 
+├── config/ 
+│ └── config.yaml # Hyperparameter configuration 
+├── data/ 
+│ ├── raw/ # Raw dataset 
+│ └── processed/ # Processed dataset 
+│   ├── train/ 
+│   ├── val/ 
+│   └── test/ 
+├── models/ # Saved checkpoints 
+├── outputs/ # Metrics, plots, predictions 
+├── tb_logs/ # TensorBoard event logs 
+├── notebooks/ # Exploration and experiments 
+│ └── exploration.ipynb 
+├── scripts/ # Project entry points 
+│ ├── train.py 
+│ └── eval.py 
+├── src/ 
+│ └── trichomecounter/ 
+│   ├── __init__.py 
+│   ├── data/ 
+│   │ ├── __init__.py 
+│   │ ├── data.py 
+│   │ ├── data_setup.py 
+│   │ └── data_transformations.py 
+│   ├── training/ 
+│   │ ├── __init__.py 
+│   │ ├── engine.py 
+│   │ ├── evaluations.py 
+│   │ ├── loss.py 
+│   │ ├── models.py 
+│   │ └── target_maps.py 
+│   └── utils/ 
+│   ├── __init__.py 
+│   ├── label_generator.py 
+│   ├── logging.py 
+│   ├── utils.py 
+│   └── visualizations.py 
+├── pyproject.toml 
+├── README.md 
+└── .gitignore 
 ```
 
 ---
@@ -147,7 +154,16 @@ Optional but recommended:
 
 ## Installation
 
-### 1. Create virtual environment
+### 1. Clone the repository
+
+```bash
+git clone <repository-url>
+cd TrichomeCounter
+```
+
+---
+
+### 2. Create a virtual environment
 
 ```bash
 python -m venv venv
@@ -156,22 +172,35 @@ python -m venv venv
 Activate the environment.
 
 **Linux / macOS**
+
 ```bash
 source venv/bin/activate
 ```
 
 **Windows**
+
 ```bash
 venv\Scripts\activate
 ```
 
 ---
 
-### 2. Install dependencies
+### 3. Install the project
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
+
+or as a developer:
+
+```bash
+pip install -e ".[dev]"
+```
+
+This command installs all required dependencies and installs the
+`trichomecounter` package in editable mode. Changes to the source code under
+`src/` are immediately reflected without reinstalling the package, and the
+package can be imported from scripts and notebooks throughout the project.
 
 ---
 
@@ -202,7 +231,7 @@ preprocess_dataset(
 Train a model using the configuration defined in `config/config.yaml`:
 
 ```bash
-python -m train
+python -m scripts.train
 ```
 
 Saved artifacts:
@@ -220,7 +249,7 @@ These are stored in:
 Evaluate a trained model:
 
 ```bash
-python -m test --model-name model0_density10
+python -m scripts.test --model-name model0_density10
 ```
 
 Evaluation outputs are written to `outputs/`.
@@ -231,12 +260,11 @@ Evaluation outputs are written to `outputs/`.
 |---|---|
 | `--model-name` | Name of the trained model (required) |
 | `--cp` | Checkpoint to evaluate: `last` or `best` |
-| `--model-root-dir` | Root directory containing saved models |
 
 Example:
 
 ```bash
-python -m test \
+python -m scripts.test \
     --model-name model0_density10 \
     --cp best
 ```
@@ -259,8 +287,8 @@ Planned experiments:
 ## Future Work
 
 - Improve robustness to annotation noise
-- Explore density-estimation approaches
 - Maybe: Create small segmentation subset to finetune best model
+
 
 ---
 
